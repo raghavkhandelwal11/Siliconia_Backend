@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/base32"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,9 +85,16 @@ func TestSignerIssueVerify(t *testing.T) {
 		t.Fatalf("verify: %+v %v", c, err)
 	}
 
-	// Tampered payload.
-	if _, err := s.Verify(tok[:len(tok)-2] + "AA"); err == nil {
-		t.Fatal("tampered token accepted")
+	// Tampered payload and tampered signature. Change a character in the
+	// middle of each part so the decoded bytes always differ (the last
+	// base64 character carries padding bits, so editing it can be a no-op).
+	parts := strings.Split(tok, ".")
+	for i := 1; i <= 2; i++ {
+		p := append([]string(nil), parts...)
+		p[i] = flipChar(p[i], len(p[i])/2)
+		if _, err := s.Verify(strings.Join(p, ".")); err == nil {
+			t.Fatalf("token with part %d tampered was accepted", i)
+		}
 	}
 	// Other key.
 	other, _ := NewSigner(config.DevKey("other-signing"), time.Minute)
@@ -104,4 +112,13 @@ func TestEffectiveRoleOnlyForAdmins(t *testing.T) {
 	if (Claims{Role: RoleBuyer, Acting: RoleAdmin}).EffectiveRole() != RoleBuyer {
 		t.Fatal("non-admin could act as another role")
 	}
+}
+
+// flipChar replaces the character at i with a different base64url character.
+func flipChar(s string, i int) string {
+	c := byte('A')
+	if s[i] == 'A' {
+		c = 'B'
+	}
+	return s[:i] + string(c) + s[i+1:]
 }
