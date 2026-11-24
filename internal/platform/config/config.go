@@ -43,6 +43,16 @@ type Config struct {
 
 	// Rate limits for unauthenticated traffic (per IP, per minute).
 	GuestRateLimitPerMinute int
+
+	// Auth (LLD 4.2). Keys are base64; local mode falls back to fixed dev keys.
+	AuthSigningKey      string // ed25519 seed (32 bytes) for access tokens
+	OTPPepper           string // HMAC key for OTP hashes
+	EncryptionMasterKey string // AES-256 key for envelope encryption (TOTP secrets, KYC data)
+	CookieSecure        bool   // Secure cookies (true behind HTTPS)
+	PublicBaseURL       string // e.g. http://localhost:8080; used for OAuth redirects
+	GoogleClientID      string
+	GoogleClientSecret  string
+	GoogleIssuer        string // overridable for tests
 }
 
 // Load reads the environment and validates the result.
@@ -61,6 +71,20 @@ func Load() (Config, error) {
 		SimNotifyURL:            env("SIM_NOTIFY_URL", "http://localhost:9005"),
 		FeatureTestInbox:        envBool("FEATURE_TEST_INBOX", true),
 		GuestRateLimitPerMinute: envInt("RATELIMIT_GUEST_PER_MINUTE", 60),
+		AuthSigningKey:          os.Getenv("AUTH_SIGNING_KEY"),
+		OTPPepper:               os.Getenv("OTP_PEPPER"),
+		EncryptionMasterKey:     os.Getenv("ENCRYPTION_MASTER_KEY"),
+		CookieSecure:            envBool("COOKIE_SECURE", false),
+		PublicBaseURL:           env("PUBLIC_BASE_URL", "http://localhost:8080"),
+		GoogleClientID:          os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret:      os.Getenv("GOOGLE_CLIENT_SECRET"),
+		GoogleIssuer:            env("GOOGLE_ISSUER", "https://accounts.google.com"),
+	}
+	if c.Mode == ModeLocal || c.Mode == ModeCI {
+		// Fixed development keys so both API copies agree locally. Never used in the prototype.
+		c.AuthSigningKey = orDefault(c.AuthSigningKey, "c2lsaWNvbmljcy1sb2NhbC1kZXYtc2lnbmluZy1rZXk=")
+		c.OTPPepper = orDefault(c.OTPPepper, "c2lsaWNvbmljcy1sb2NhbC1kZXYtb3RwLXBlcHBlcg==")
+		c.EncryptionMasterKey = orDefault(c.EncryptionMasterKey, "c2lsaWNvbmljcy1sb2NhbC1kZXYtbWFzdGVyLWtleSE=")
 	}
 	return c, c.validate()
 }
@@ -84,8 +108,21 @@ func (c Config) validate() error {
 	if c.DatabaseURL == "" || c.RedisURL == "" {
 		return fmt.Errorf("config: DATABASE_URL and REDIS_URL are required")
 	}
+	if c.AuthSigningKey == "" || c.OTPPepper == "" || c.EncryptionMasterKey == "" {
+		return fmt.Errorf("config: AUTH_SIGNING_KEY, OTP_PEPPER and ENCRYPTION_MASTER_KEY are required in %s mode", c.Mode)
+	}
 	return nil
 }
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
+// GoogleEnabled reports whether Google sign-in is configured (free OAuth client).
+func (c Config) GoogleEnabled() bool { return c.GoogleClientID != "" && c.GoogleClientSecret != "" }
 
 func env(key, def string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {

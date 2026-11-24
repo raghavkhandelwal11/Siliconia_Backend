@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
@@ -21,6 +22,9 @@ type Deps struct {
 	Limiter        *ratelimit.Limiter
 	GuestPerMinute int
 	Health         *health.Handler
+	// Auth is optional so probe-only tests can build a router without it.
+	AuthService *auth.Service
+	Auth        *auth.Handler
 }
 
 // New returns the root handler.
@@ -38,6 +42,12 @@ func New(d Deps) http.Handler {
 		}
 		api.Get("/healthz", d.Health.Healthz)
 		api.Get("/readyz", d.Health.Readyz)
+		if d.Auth != nil {
+			api.Group(func(api chi.Router) {
+				api.Use(auth.Authenticate(d.AuthService), auth.CSRF)
+				d.Auth.Routes(api)
+			})
+		}
 	})
 
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) { httpx.WriteError(w, r, httpx.ErrNotFound) })
