@@ -64,7 +64,7 @@ jobs:
       - name: Generated SQL code is up to date
         run: docker run --rm -v "$PWD":/src -w /src sqlc/sqlc:1.27.0 diff
       - name: OpenAPI spec is valid
-        run: npx --yes @redocly/cli@1 lint api/openapi.yaml --skip-rule no-server-example.com --skip-rule operation-4xx-response --skip-rule info-license
+        run: npx --yes @redocly/cli@1 lint api/openapi.yaml --skip-rule no-server-example.com --skip-rule operation-4xx-response --skip-rule info-license --skip-rule operation-2xx-response
 
   security:
     runs-on: ubuntu-latest

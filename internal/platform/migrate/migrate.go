@@ -36,6 +36,20 @@ func run(ctx context.Context, databaseURL string, fn func(*sql.DB) error) error 
 	if err := sqlDB.PingContext(ctx); err != nil {
 		return fmt.Errorf("migrate: ping: %w", err)
 	}
+	// Serialise concurrent runs (parallel test packages, two replicas starting
+	// together) with a session advisory lock held on a dedicated connection.
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migrate: conn: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtext('siliconia_migrate'))`); err != nil {
+		return fmt.Errorf("migrate: lock: %w", err)
+	}
+	defer func() {
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(hashtext('siliconia_migrate'))`)
+	}()
+
 	goose.SetBaseFS(db.Migrations)
 	if err := goose.SetDialect("postgres"); err != nil {
 		return err

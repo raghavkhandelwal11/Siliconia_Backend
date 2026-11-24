@@ -1,0 +1,5 @@
+# Public local-only development keys committed in a997d1b and replaced by
+# config.DevKey in the next commit. They were never used outside local/CI mode.
+a997d1b32f5087241f5a0f6f375638e2b4b2b681:internal/platform/config/config.go:generic-api-key:85
+a997d1b32f5087241f5a0f6f375638e2b4b2b681:internal/platform/config/config.go:generic-api-key:87
+a997d1b32f5087241f5a0f6f375638e2b4b2b681:internal/platform/crypto/envelope_test.go:generic-api-key:8

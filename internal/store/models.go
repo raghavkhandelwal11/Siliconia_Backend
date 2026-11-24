@@ -5,69 +5,210 @@
 package store
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"net/netip"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 )
 
+type AccountRole string
+
+const (
+	AccountRoleBUYER    AccountRole = "BUYER"
+	AccountRoleSELLER   AccountRole = "SELLER"
+	AccountRolePROMOTER AccountRole = "PROMOTER"
+	AccountRoleCREATOR  AccountRole = "CREATOR"
+	AccountRoleADMIN    AccountRole = "ADMIN"
+)
+
+func (e *AccountRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AccountRole(s)
+	case string:
+		*e = AccountRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AccountRole: %T", src)
+	}
+	return nil
+}
+
+type NullAccountRole struct {
+	AccountRole AccountRole `json:"accountRole"`
+	Valid       bool        `json:"valid"` // Valid is true if AccountRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAccountRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.AccountRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AccountRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAccountRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AccountRole), nil
+}
+
+type ApprovalStatus string
+
+const (
+	ApprovalStatusDRAFT       ApprovalStatus = "DRAFT"
+	ApprovalStatusSUBMITTED   ApprovalStatus = "SUBMITTED"
+	ApprovalStatusUNDERREVIEW ApprovalStatus = "UNDER_REVIEW"
+	ApprovalStatusAPPROVED    ApprovalStatus = "APPROVED"
+	ApprovalStatusREJECTED    ApprovalStatus = "REJECTED"
+	ApprovalStatusSUSPENDED   ApprovalStatus = "SUSPENDED"
+)
+
+func (e *ApprovalStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ApprovalStatus(s)
+	case string:
+		*e = ApprovalStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ApprovalStatus: %T", src)
+	}
+	return nil
+}
+
+type NullApprovalStatus struct {
+	ApprovalStatus ApprovalStatus `json:"approvalStatus"`
+	Valid          bool           `json:"valid"` // Valid is true if ApprovalStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullApprovalStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.ApprovalStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ApprovalStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullApprovalStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ApprovalStatus), nil
+}
+
+type Account struct {
+	ID              uuid.UUID      `json:"id"`
+	Role            AccountRole    `json:"role"`
+	PhoneE164       *string        `json:"phoneE164"`
+	PhoneVerifiedAt *time.Time     `json:"phoneVerifiedAt"`
+	GoogleSub       *string        `json:"googleSub"`
+	Email           *string        `json:"email"`
+	Name            string         `json:"name"`
+	Status          string         `json:"status"`
+	Approval        ApprovalStatus `json:"approval"`
+	ApprovalReason  *string        `json:"approvalReason"`
+	TotpSecretEnc   []byte         `json:"totpSecretEnc"`
+	TotpConfirmedAt *time.Time     `json:"totpConfirmedAt"`
+	IsSynthetic     bool           `json:"isSynthetic"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	Version         int32          `json:"version"`
+}
+
 type AuditLog struct {
-	ID           pgtype.UUID        `json:"id"`
-	ActorID      pgtype.UUID        `json:"actorId"`
-	ActingAsRole pgtype.Text        `json:"actingAsRole"`
-	Action       string             `json:"action"`
-	TargetType   string             `json:"targetType"`
-	TargetID     string             `json:"targetId"`
-	Before       []byte             `json:"before"`
-	After        []byte             `json:"after"`
-	Ip           *netip.Addr        `json:"ip"`
-	At           pgtype.Timestamptz `json:"at"`
+	ID           uuid.UUID   `json:"id"`
+	ActorID      *uuid.UUID  `json:"actorId"`
+	ActingAsRole *string     `json:"actingAsRole"`
+	Action       string      `json:"action"`
+	TargetType   string      `json:"targetType"`
+	TargetID     string      `json:"targetId"`
+	Before       []byte      `json:"before"`
+	After        []byte      `json:"after"`
+	Ip           *netip.Addr `json:"ip"`
+	At           time.Time   `json:"at"`
 }
 
 type Config struct {
-	Key       string             `json:"key"`
-	Value     []byte             `json:"value"`
-	Version   int32              `json:"version"`
-	UpdatedBy pgtype.UUID        `json:"updatedBy"`
-	UpdatedAt pgtype.Timestamptz `json:"updatedAt"`
+	Key       string     `json:"key"`
+	Value     []byte     `json:"value"`
+	Version   int32      `json:"version"`
+	UpdatedBy *uuid.UUID `json:"updatedBy"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 type ConfigHistory struct {
-	Key       string             `json:"key"`
-	Version   int32              `json:"version"`
-	Value     []byte             `json:"value"`
-	ChangedBy pgtype.UUID        `json:"changedBy"`
-	ChangedAt pgtype.Timestamptz `json:"changedAt"`
+	Key       string     `json:"key"`
+	Version   int32      `json:"version"`
+	Value     []byte     `json:"value"`
+	ChangedBy *uuid.UUID `json:"changedBy"`
+	ChangedAt time.Time  `json:"changedAt"`
 }
 
 type IdempotencyKey struct {
-	AccountID   pgtype.UUID        `json:"accountId"`
-	Route       string             `json:"route"`
-	Key         string             `json:"key"`
-	RequestHash []byte             `json:"requestHash"`
-	StatusCode  pgtype.Int4        `json:"statusCode"`
-	Response    []byte             `json:"response"`
-	CreatedAt   pgtype.Timestamptz `json:"createdAt"`
+	AccountID   uuid.UUID `json:"accountId"`
+	Route       string    `json:"route"`
+	Key         string    `json:"key"`
+	RequestHash []byte    `json:"requestHash"`
+	StatusCode  *int32    `json:"statusCode"`
+	Response    []byte    `json:"response"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type OtpChallenge struct {
+	ID         uuid.UUID       `json:"id"`
+	PhoneE164  string          `json:"phoneE164"`
+	Role       NullAccountRole `json:"role"`
+	Purpose    string          `json:"purpose"`
+	AccountID  *uuid.UUID      `json:"accountId"`
+	CodeHash   []byte          `json:"codeHash"`
+	Attempts   int32           `json:"attempts"`
+	CreatedAt  time.Time       `json:"createdAt"`
+	ExpiresAt  time.Time       `json:"expiresAt"`
+	ConsumedAt *time.Time      `json:"consumedAt"`
 }
 
 type Outbox struct {
-	ID          pgtype.UUID        `json:"id"`
-	Topic       string             `json:"topic"`
-	Key         string             `json:"key"`
-	Payload     []byte             `json:"payload"`
-	CreatedAt   pgtype.Timestamptz `json:"createdAt"`
-	PublishedAt pgtype.Timestamptz `json:"publishedAt"`
+	ID          uuid.UUID  `json:"id"`
+	Topic       string     `json:"topic"`
+	Key         string     `json:"key"`
+	Payload     []byte     `json:"payload"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	PublishedAt *time.Time `json:"publishedAt"`
 }
 
 type ProcessedEvent struct {
-	Consumer    string             `json:"consumer"`
-	EventID     pgtype.UUID        `json:"eventId"`
-	ProcessedAt pgtype.Timestamptz `json:"processedAt"`
+	Consumer    string    `json:"consumer"`
+	EventID     uuid.UUID `json:"eventId"`
+	ProcessedAt time.Time `json:"processedAt"`
+}
+
+type Session struct {
+	ID              uuid.UUID       `json:"id"`
+	AccountID       uuid.UUID       `json:"accountId"`
+	FamilyID        uuid.UUID       `json:"familyId"`
+	RefreshHash     []byte          `json:"refreshHash"`
+	PrevRefreshHash []byte          `json:"prevRefreshHash"`
+	UserAgent       string          `json:"userAgent"`
+	Ip              *netip.Addr     `json:"ip"`
+	MfaAt           *time.Time      `json:"mfaAt"`
+	ActingRole      NullAccountRole `json:"actingRole"`
+	CreatedAt       time.Time       `json:"createdAt"`
+	LastUsedAt      time.Time       `json:"lastUsedAt"`
+	ExpiresAt       time.Time       `json:"expiresAt"`
+	RevokedAt       *time.Time      `json:"revokedAt"`
 }
 
 type WebhookEvent struct {
-	Provider    string             `json:"provider"`
-	EventID     string             `json:"eventId"`
-	ReceivedAt  pgtype.Timestamptz `json:"receivedAt"`
-	Payload     []byte             `json:"payload"`
-	ProcessedAt pgtype.Timestamptz `json:"processedAt"`
+	Provider    string     `json:"provider"`
+	EventID     string     `json:"eventId"`
+	ReceivedAt  time.Time  `json:"receivedAt"`
+	Payload     []byte     `json:"payload"`
+	ProcessedAt *time.Time `json:"processedAt"`
 }

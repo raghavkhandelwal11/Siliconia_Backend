@@ -4,19 +4,28 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/crypto"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/logx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/redisx"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
 
 func main() {
@@ -44,10 +53,19 @@ func main() {
 	}
 	defer rdb.Close()
 
+	limiter := ratelimit.New(rdb)
+	authSvc, authHandler, err := buildAuth(ctx, cfg, pool, rdb, limiter, log)
+	if err != nil {
+		log.Error("auth", "err", err)
+		os.Exit(1)
+	}
+
 	handler := server.New(server.Deps{
 		Log:            log,
 		AllowedOrigins: cfg.AllowedOrigins,
-		Limiter:        ratelimit.New(rdb),
+		Limiter:        limiter,
+		AuthService:    authSvc,
+		Auth:           authHandler,
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,
@@ -83,4 +101,40 @@ func main() {
 		log.Error("shutdown", "err", err)
 	}
 	log.Info("stopped")
+}
+
+// buildAuth assembles sign-in: messaging adapters, token signer, envelope
+// encryption for TOTP secrets and, when configured, Google sign-in.
+func buildAuth(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client, limiter *ratelimit.Limiter, log *slog.Logger) (*auth.Service, *auth.Handler, error) {
+	msgs, err := messaging.NewRouter(cfg.ProviderSMS, cfg.ProviderWhatsApp, cfg.ProviderEmail, cfg.SimNotifyURL, log)
+	if err != nil {
+		return nil, nil, err
+	}
+	signer, err := auth.NewSigner(cfg.AuthSigningKey, auth.AccessTTL)
+	if err != nil {
+		return nil, nil, err
+	}
+	box, err := crypto.NewBox(cfg.EncryptionMasterKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	pepper, err := auth.DecodeKey(cfg.OTPPepper)
+	if err != nil {
+		return nil, nil, fmt.Errorf("OTP_PEPPER: %w", err)
+	}
+	svc := &auth.Service{
+		Pool: pool, Q: store.New(pool), Redis: rdb, Limiter: limiter, Messages: msgs,
+		Signer: signer, Box: box, Pepper: pepper, Log: log,
+	}
+	var google *auth.Google
+	if cfg.GoogleEnabled() {
+		dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if google, err = auth.NewGoogle(dctx, cfg.GoogleIssuer, cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.PublicBaseURL); err != nil {
+			// Phone sign-in keeps working; Google shows as unavailable.
+			log.Warn("google sign-in disabled", "err", err)
+			google = nil
+		}
+	}
+	return svc, auth.NewHandler(svc, google, cfg.CookieSecure), nil
 }
