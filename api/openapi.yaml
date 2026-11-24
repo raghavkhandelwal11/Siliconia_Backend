@@ -114,8 +114,7 @@ paths:
       summary: Rotate the refresh token and issue a new access token
       description: Uses the sx_rt cookie. Reusing an old refresh token signs out every device in that session family.
       tags: [auth]
-      security: []
-      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      security: [{ csrfHeader: [] }]
       responses:
         "200":
           description: New cookies set
@@ -134,7 +133,7 @@ paths:
       operationId: logout
       summary: End this session and clear cookies
       tags: [auth]
-      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
       responses:
         "204": { description: Signed out }
         "403": { $ref: "#/components/responses/Error" }
@@ -208,7 +207,7 @@ paths:
       operationId: setupTotp
       summary: Create the admin's authenticator secret (only before it is confirmed)
       tags: [auth, admin]
-      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
       responses:
         "200":
           description: Secret to add to an authenticator app
@@ -229,7 +228,7 @@ paths:
       operationId: verifyTotp
       summary: Check the authenticator code; unlocks admin features for this session
       tags: [auth, admin]
-      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
       requestBody:
         required: true
         content:
@@ -264,7 +263,7 @@ paths:
       operationId: updateMe
       summary: Update name and email
       tags: [account]
-      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
       requestBody:
         required: true
         content:
@@ -291,7 +290,7 @@ paths:
       operationId: sendPhoneVerifyOtp
       summary: Send a code to add or verify a mobile number (Google accounts)
       tags: [account]
-      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
       requestBody:
         required: true
         content:
@@ -322,7 +321,7 @@ paths:
       operationId: verifyPhone
       summary: Confirm the code and save the verified number
       tags: [account]
-      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
       requestBody:
         required: true
         content:
@@ -369,8 +368,8 @@ paths:
       operationId: revokeSession
       summary: Sign out one device
       tags: [account]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
       parameters:
-        - { $ref: "#/components/parameters/CSRF" }
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
         "204": { description: Signed out }
@@ -383,7 +382,7 @@ paths:
       operationId: switchAdminRole
       summary: Admin acts as another role (null returns to admin); audited (FR-ROLE-05)
       tags: [admin]
-      parameters: [{ $ref: "#/components/parameters/CSRF" }]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
       requestBody:
         required: true
         content:
@@ -416,14 +415,12 @@ components:
       type: apiKey
       in: cookie
       name: sx_at
-      description: Short-lived access token set by sign-in (LLD 4.2). Mutating requests also send X-CSRF-Token.
-  parameters:
-    CSRF:
-      name: X-CSRF-Token
+      description: Short-lived access token set by sign-in (LLD 4.2).
+    csrfHeader:
+      type: apiKey
       in: header
-      required: true
-      description: Copy of the sx_csrf cookie (double-submit CSRF protection)
-      schema: { type: string }
+      name: X-CSRF-Token
+      description: Copy of the sx_csrf cookie, required on state-changing requests that carry session cookies (double-submit CSRF).
   schemas:
     Role:
       type: string
