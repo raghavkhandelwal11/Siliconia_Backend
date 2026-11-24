@@ -1,0 +1,490 @@
+openapi: 3.1.0
+info:
+  title: Siliconics API
+  version: 0.2.0
+  description: |
+    REST API for the Siliconics prototype (LLD section 7). Source of truth for the
+    HTTP contract; the web app generates its TypeScript client from this file.
+    Errors use RFC 9457 problem details.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      summary: Liveness probe
+      tags: [system]
+      security: []
+      responses:
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "200":
+          description: The API process is up
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /readyz:
+    get:
+      operationId: getReadyz
+      summary: Readiness probe (PostgreSQL and Redis)
+      tags: [system]
+      security: []
+      responses:
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "200":
+          description: All dependencies are reachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+        "503":
+          description: At least one dependency is down
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+  /auth/otp/send:
+    post:
+      operationId: sendSignInOtp
+      summary: Send a 6-digit sign-in code by SMS (FR-AUTH-01)
+      description: Limits are 3 codes per number per 15 minutes, 10 per IP per hour and one every 30 seconds.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [phone, role]
+              properties:
+                phone: { type: string, description: 10-digit Indian mobile number, example: "9876543210" }
+                role: { $ref: "#/components/schemas/Role" }
+      responses:
+        "200":
+          description: Code sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challengeId, resendAfterSec, expiresInSec]
+                properties:
+                  challengeId: { type: string, format: uuid }
+                  resendAfterSec: { type: integer }
+                  expiresInSec: { type: integer }
+        "400": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Error" }
+  /auth/otp/verify:
+    post:
+      operationId: verifySignInOtp
+      summary: Check the code; signs in, creating the account on first use
+      description: Sets the sx_at, sx_rt and sx_csrf cookies. Admin accounts cannot be created here.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challengeId, code]
+              properties:
+                challengeId: { type: string, format: uuid }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account, isNew]
+                properties:
+                  account: { $ref: "#/components/schemas/Account" }
+                  isNew: { type: boolean }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/refresh:
+    post:
+      operationId: refreshSession
+      summary: Rotate the refresh token and issue a new access token
+      description: Uses the sx_rt cookie. Reusing an old refresh token signs out every device in that session family.
+      tags: [auth]
+      security: [{ csrfHeader: [] }]
+      responses:
+        "200":
+          description: New cookies set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account]
+                properties:
+                  account: { $ref: "#/components/schemas/Account" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: End this session and clear cookies
+      tags: [auth]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      responses:
+        "204": { description: Signed out }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/google/status:
+    get:
+      operationId: getGoogleStatus
+      summary: Whether "Continue with Google" is configured
+      tags: [auth]
+      security: []
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled]
+                properties:
+                  enabled: { type: boolean }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/google/start:
+    get:
+      operationId: startGoogleSignIn
+      summary: Redirect to Google (OpenID Connect with PKCE) (FR-AUTH-04)
+      tags: [auth]
+      security: []
+      parameters:
+        - { name: role, in: query, required: true, schema: { $ref: "#/components/schemas/Role" } }
+        - { name: next, in: query, required: false, schema: { type: string }, description: Relative path to return to }
+      responses:
+        "302": { description: Redirect to Google }
+        "400": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Error" }
+  /auth/google/callback:
+    get:
+      operationId: googleCallback
+      summary: Google returns here; signs in and redirects into the web app
+      description: New Google accounts are sent to /auth/verify-phone because a verified mobile number is required to order.
+      tags: [auth]
+      security: []
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Redirect to the web app (or /auth/sign-in?error=...) }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/Error" }
+  /auth/totp/status:
+    get:
+      operationId: getTotpStatus
+      summary: Admin authenticator status
+      tags: [auth, admin]
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enrolled, verified]
+                properties:
+                  enrolled: { type: boolean }
+                  verified: { type: boolean, description: This session has passed TOTP }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/totp/setup:
+    post:
+      operationId: setupTotp
+      summary: Create the admin's authenticator secret (only before it is confirmed)
+      tags: [auth, admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      responses:
+        "200":
+          description: Secret to add to an authenticator app
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret, otpauthUri]
+                properties:
+                  secret: { type: string }
+                  otpauthUri: { type: string }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/totp/verify:
+    post:
+      operationId: verifyTotp
+      summary: Check the authenticator code; unlocks admin features for this session
+      tags: [auth, admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "204": { description: Verified; new access cookie set }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /me:
+    get:
+      operationId: getMe
+      summary: The signed-in account
+      tags: [account]
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    patch:
+      operationId: updateMe
+      summary: Update name and email
+      tags: [account]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 100 }
+                email: { type: [string, "null"], maxLength: 254 }
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /me/phone/otp:
+    post:
+      operationId: sendPhoneVerifyOtp
+      summary: Send a code to add or verify a mobile number (Google accounts)
+      tags: [account]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [phone]
+              properties:
+                phone: { type: string }
+      responses:
+        "200":
+          description: Code sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challengeId, resendAfterSec]
+                properties:
+                  challengeId: { type: string, format: uuid }
+                  resendAfterSec: { type: integer }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /me/phone/verify:
+    post:
+      operationId: verifyPhone
+      summary: Confirm the code and save the verified number
+      tags: [account]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [challengeId, code]
+              properties:
+                challengeId: { type: string, format: uuid }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /me/sessions:
+    get:
+      operationId: listSessions
+      summary: Devices signed in to this account
+      tags: [account]
+      responses:
+        "200":
+          description: Active sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /me/sessions/{id}:
+    delete:
+      operationId: revokeSession
+      summary: Sign out one device
+      tags: [account]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Signed out }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /admin/role-switch:
+    post:
+      operationId: switchAdminRole
+      summary: Admin acts as another role (null returns to admin); audited (FR-ROLE-05)
+      tags: [admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [role]
+              properties:
+                role:
+                  oneOf:
+                    - { $ref: "#/components/schemas/Role" }
+                    - { type: "null" }
+      responses:
+        "200":
+          description: Switched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  actingRole: { oneOf: [{ $ref: "#/components/schemas/Role" }, { type: "null" }] }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sx_at
+      description: Short-lived access token set by sign-in (LLD 4.2).
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Copy of the sx_csrf cookie, required on state-changing requests that carry session cookies (double-submit CSRF).
+  schemas:
+    Role:
+      type: string
+      enum: [BUYER, SELLER, PROMOTER, CREATOR, ADMIN]
+    Account:
+      type: object
+      required: [id, role, name, phoneVerified, approval, mfaVerified, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        role: { $ref: "#/components/schemas/Role" }
+        actingRole: { $ref: "#/components/schemas/Role" }
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string, description: "E.164, e.g. +919876543210" }
+        phoneVerified: { type: boolean }
+        approval: { type: string, enum: [DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, SUSPENDED] }
+        mfaVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    Session:
+      type: object
+      required: [id, userAgent, createdAt, lastUsedAt, current]
+      properties:
+        id: { type: string, format: uuid }
+        userAgent: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time }
+        current: { type: boolean }
+    Health:
+      type: object
+      required: [status, version, mode]
+      properties:
+        status: { type: string, enum: [ok] }
+        version: { type: string }
+        mode: { type: string, enum: [local, ci, prototype, production] }
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [up, down] }
+    Problem:
+      type: object
+      description: RFC 9457 problem details with a stable error code (LLD 4.6)
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        requestId: { type: string }
+  responses:
+    Error:
+      description: Problem details (see code)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    RateLimited:
+      description: Too many requests; see Retry-After
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }

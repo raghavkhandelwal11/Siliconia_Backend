@@ -1,0 +1,41 @@
+# One HTTPS address for everything (LLD 17.1). Locally SITE_ADDRESS is ":80"
+# (plain HTTP on port 8080); on the VM it is the free subdomain, and Caddy gets
+# a Let's Encrypt certificate automatically.
+
+{$SITE_ADDRESS}
+
+encode zstd gzip
+
+header {
+	Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	X-Content-Type-Options "nosniff"
+	Referrer-Policy "strict-origin-when-cross-origin"
+	-Server
+}
+
+# Internal ingest endpoints are never exposed.
+handle /internal/* {
+	respond 404
+}
+
+# API: two copies, health-checked; SSE is streamed without buffering.
+handle /api/* {
+	reverse_proxy api:8080 {
+		lb_policy round_robin
+		health_uri /healthz
+		health_interval 5s
+		flush_interval -1
+	}
+}
+
+# Test inbox for simulated SMS and WhatsApp (password-protected by sim-notify).
+handle /test-inbox* {
+	reverse_proxy sim-notify:9005
+}
+
+# Everything else is the Next.js web app.
+handle {
+	reverse_proxy {$WEB_UPSTREAM} {
+		lb_policy round_robin
+	}
+}

@@ -1,0 +1,14 @@
+# Secrets and local env
+.env
+deploy/compose/.env
+
+# Build and test output
+/bin/
+/dist/
+coverage.out
+*.test
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
