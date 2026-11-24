@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="10">
+<title>Test inbox · Siliconics</title>
+<style>
+  :root { --ink:#1f2933; --muted:#5a6472; --line:#d9dee5; --bg:#f6f7f9; --card:#fff; --test:#b3261e; --accent:#1f3a5f; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e8ecf1; --muted:#a8b1bd; --line:#334155; --bg:#0f172a; --card:#162032; --test:#ff8a80; --accent:#9cc3ff; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); }
+  .banner { background:var(--test); color:#fff; padding:8px 16px; font-weight:600; text-align:center; }
+  main { max-width:880px; margin:0 auto; padding:16px; }
+  h1 { font-size:22px; color:var(--accent); margin:16px 0 4px; }
+  p.lead { color:var(--muted); margin:0 0 16px; }
+  form { display:flex; gap:8px; margin-bottom:16px; }
+  input { flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font:inherit; background:var(--card); color:var(--ink); }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  .msg { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+  .meta { display:flex; flex-wrap:wrap; gap:6px 14px; color:var(--muted); font-size:13px; }
+  .chip { display:inline-block; padding:1px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; }
+  .body { margin-top:6px; white-space:pre-wrap; word-break:break-word; }
+  .empty { color:var(--muted); padding:24px; text-align:center; border:1px dashed var(--line); border-radius:10px; }
+</style>
+</head>
+<body>
+<div class="banner" role="status">TEST MODE: simulated messages only. Nothing here was sent to a real phone.</div>
+<main>
+  <h1>Test inbox</h1>
+  <p class="lead">Sign-in codes (OTPs), SMS and WhatsApp messages from the prototype. Messages are kept for 24 hours. This page refreshes every 10 seconds.</p>
+  <form method="get" action="/test-inbox">
+    <label for="to" class="visually-hidden" style="position:absolute;left:-9999px">Phone number</label>
+    <input id="to" name="to" value="{{.Query}}" placeholder="Phone number, e.g. +919812345678" inputmode="tel" autocomplete="off">
+    <button type="submit">Search</button>
+  </form>
+  {{if .Messages}}
+    {{range .Messages}}
+    <article class="msg">
+      <div class="meta">
+        <span class="chip">{{.Channel}}</span>
+        <span>To {{.To}}</span>
+        <span>{{.Template}}</span>
+        <time datetime="{{.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.CreatedAt.Format "02 Jan 15:04:05 MST"}}</time>
+      </div>
+      <div class="body">{{.Body}}</div>
+    </article>
+    {{end}}
+  {{else}}
+    <div class="empty">No messages{{if .Query}} for {{.Query}}{{end}} yet.</div>
+  {{end}}
+</main>
+</body>
+</html>

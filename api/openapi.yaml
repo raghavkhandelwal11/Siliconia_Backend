@@ -1,0 +1,87 @@
+openapi: 3.1.0
+info:
+  title: Siliconics API
+  version: 0.1.0
+  description: |
+    REST API for the Siliconics prototype (LLD section 7). Source of truth for the
+    HTTP contract; the web app generates its TypeScript client from this file.
+    Errors use RFC 9457 problem details.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      summary: Liveness probe
+      tags: [system]
+      security: []
+      responses:
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "200":
+          description: The API process is up
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /readyz:
+    get:
+      operationId: getReadyz
+      summary: Readiness probe (PostgreSQL and Redis)
+      tags: [system]
+      security: []
+      responses:
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "200":
+          description: All dependencies are reachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+        "503":
+          description: At least one dependency is down
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sx_at
+      description: Short-lived access token set by sign-in (LLD 4.2). Added with T1.1.
+  schemas:
+    Health:
+      type: object
+      required: [status, version, mode]
+      properties:
+        status: { type: string, enum: [ok] }
+        version: { type: string }
+        mode: { type: string, enum: [local, ci, prototype, production] }
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [up, down] }
+    Problem:
+      type: object
+      description: RFC 9457 problem details with a stable error code (LLD 4.6)
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string }
+        detail: { type: string }
+        requestId: { type: string }
+  responses:
+    RateLimited:
+      description: Too many requests; see Retry-After
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }

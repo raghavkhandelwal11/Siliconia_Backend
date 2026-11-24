@@ -1,0 +1,106 @@
+# Siliconics stack (LLD 17.1). The same file runs locally and on the free VM.
+#
+#   cp deploy/compose/.env.example deploy/compose/.env
+#   docker compose -f deploy/compose/docker-compose.yml up --build
+#
+# Open http://localhost:8080 : Caddy serves the web app (WEB_UPSTREAM),
+# /api/* from the API and /test-inbox from sim-notify on one origin.
+
+name: siliconics
+
+x-backend: &backend
+  build:
+    context: ../..
+    args:
+      VERSION: ${APP_VERSION:-dev}
+  image: ${BACKEND_IMAGE:-siliconics-backend:dev}
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-siliconia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-siliconia}
+      POSTGRES_DB: ${POSTGRES_DB:-siliconia}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-siliconia}"]
+      interval: 5s
+      retries: 10
+    deploy: { resources: { limits: { memory: 4g } } }
+    restart: unless-stopped
+    ports: ["127.0.0.1:5432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "400mb", "--maxmemory-policy", "noeviction"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    deploy: { resources: { limits: { memory: 512m } } }
+    restart: unless-stopped
+    ports: ["127.0.0.1:6379:6379"]
+
+  migrate:
+    <<: *backend
+    command: ["/usr/local/bin/migrate", "up"]
+    restart: "no"
+
+  seed:
+    <<: *backend
+    command: ["/usr/local/bin/seed"]
+    restart: "no"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  api:
+    <<: *backend
+    command: ["/usr/local/bin/api"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    deploy:
+      replicas: 2
+      resources: { limits: { memory: 1g } }
+
+  worker:
+    <<: *backend
+    command: ["/usr/local/bin/worker"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    deploy: { resources: { limits: { memory: 512m } } }
+
+  sim-notify:
+    <<: *backend
+    command: ["/usr/local/bin/sim-notify"]
+    environment:
+      HTTP_ADDR: ":9005"
+    depends_on: {}
+    deploy: { resources: { limits: { memory: 128m } } }
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      WEB_UPSTREAM: ${WEB_UPSTREAM:-host.docker.internal:3000}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+    ports: ["${HTTP_PORT:-8080}:80", "${HTTPS_PORT:-8443}:443"]
+    depends_on: [api, sim-notify]
+    deploy: { resources: { limits: { memory: 128m } } }
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  caddydata:
