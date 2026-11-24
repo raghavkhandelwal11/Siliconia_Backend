@@ -5,6 +5,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strconv"
@@ -81,12 +83,19 @@ func Load() (Config, error) {
 		GoogleIssuer:            env("GOOGLE_ISSUER", "https://accounts.google.com"),
 	}
 	if c.Mode == ModeLocal || c.Mode == ModeCI {
-		// Fixed development keys so both API copies agree locally. Never used in the prototype.
-		c.AuthSigningKey = orDefault(c.AuthSigningKey, "c2lsaWNvbmljcy1sb2NhbC1kZXYtc2lnbmluZy1rZXk=")
-		c.OTPPepper = orDefault(c.OTPPepper, "c2lsaWNvbmljcy1sb2NhbC1kZXYtb3RwLXBlcHBlcg==")
-		c.EncryptionMasterKey = orDefault(c.EncryptionMasterKey, "c2lsaWNvbmljcy1sb2NhbC1kZXYtbWFzdGVyLWtleSE=")
+		// Development keys derived from fixed labels, so every API copy agrees
+		// locally without a secret in the repository. Never used in the prototype.
+		c.AuthSigningKey = orDefault(c.AuthSigningKey, DevKey("auth-signing"))
+		c.OTPPepper = orDefault(c.OTPPepper, DevKey("otp-pepper"))
+		c.EncryptionMasterKey = orDefault(c.EncryptionMasterKey, DevKey("encryption-master"))
 	}
 	return c, c.validate()
+}
+
+// DevKey returns a deterministic 32-byte base64 key for local and CI use only.
+func DevKey(label string) string {
+	sum := sha256.Sum256([]byte("siliconics-local-dev:" + label))
+	return base64.StdEncoding.EncodeToString(sum[:])
 }
 
 func (c Config) validate() error {

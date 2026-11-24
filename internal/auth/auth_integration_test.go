@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"io"
 	"log/slog"
 	"net/http"
@@ -79,8 +80,8 @@ func setup(t *testing.T) *env {
 	}
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	signer, _ := auth.NewSigner("c2lsaWNvbmljcy1sb2NhbC1kZXYtc2lnbmluZy1rZXk=", auth.AccessTTL)
-	box, _ := crypto.NewBox("c2lsaWNvbmljcy1sb2NhbC1kZXYtbWFzdGVyLWtleSE=")
+	signer, _ := auth.NewSigner(config.DevKey("auth-signing"), auth.AccessTTL)
+	box, _ := crypto.NewBox(config.DevKey("encryption-master"))
 	in := &inbox{last: map[string]string{}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	svc := &auth.Service{

@@ -2,10 +2,11 @@ package crypto
 
 import (
 	"bytes"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"testing"
 )
 
-const key = "c2lsaWNvbmljcy1sb2NhbC1kZXYtbWFzdGVyLWtleSE="
+var key = config.DevKey("encryption-master")
 
 func TestSealOpenRoundTrip(t *testing.T) {
 	b, err := NewBox(key)

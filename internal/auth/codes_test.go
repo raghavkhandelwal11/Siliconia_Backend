@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/base32"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func TestTOTPRFCVectors(t *testing.T) {
 }
 
 func TestSignerIssueVerify(t *testing.T) {
-	s, err := NewSigner("c2lsaWNvbmljcy1sb2NhbC1kZXYtc2lnbmluZy1rZXk=", 15*time.Minute)
+	s, err := NewSigner(config.DevKey("auth-signing"), 15*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func TestSignerIssueVerify(t *testing.T) {
 		t.Fatal("tampered token accepted")
 	}
 	// Other key.
-	other, _ := NewSigner("b3RoZXItc2lsaWNvbmljcy1kZXYtc2lnbmluZy1rZXk=", time.Minute)
+	other, _ := NewSigner(config.DevKey("other-signing"), time.Minute)
 	if _, err := other.Verify(tok); err == nil {
 		t.Fatal("token from another key accepted")
 	}
