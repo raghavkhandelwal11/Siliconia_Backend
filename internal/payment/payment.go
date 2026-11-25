@@ -35,12 +35,19 @@ const (
 
 var ErrPaymentDown = httpx.ErrUnavailable.WithDetail("The payment service is not responding. Try again in a minute")
 
+// Hook lets a module (checkout, membership) react to a payment inside the
+// webhook's transaction. It may return work to run after the commit, such as
+// refunding a payment that arrived for an expired order.
+type Hook func(ctx context.Context, tx pgx.Tx, q *store.Queries, p store.Payment) (after func(context.Context), err error)
+
 // Service creates payments and applies webhooks.
 type Service struct {
 	Pool     *pgxpool.Pool
 	Q        *store.Queries
 	Provider provider.Provider
 	Log      *slog.Logger
+	// Hooks by payment purpose (ORDER, MEMBERSHIP, RENEWAL).
+	Hooks map[string]Hook
 }
 
 // Checkout is what the web app needs to send the shopper to pay.
@@ -66,6 +73,9 @@ func (s *Service) Start(ctx context.Context, purpose, ref string, account *uuid.
 		return Checkout{}, ErrPaymentDown
 	}
 	if err := s.Q.SetProviderOrder(ctx, store.SetProviderOrderParams{ID: p.ID, ProviderOrderID: &o.ProviderOrderID}); err != nil {
+		return Checkout{}, err
+	}
+	if err := s.Q.SetPaymentCheckoutURL(ctx, store.SetPaymentCheckoutURLParams{ID: p.ID, CheckoutUrl: &o.CheckoutURL}); err != nil {
 		return Checkout{}, err
 	}
 	return Checkout{PaymentID: p.ID, CheckoutURL: o.CheckoutURL}, nil
@@ -112,30 +122,42 @@ func (s *Service) HandleWebhook(r *http.Request) error {
 		return err
 	}
 	raw, _ := json.Marshal(evt)
-	return db.InTx(r.Context(), s.Pool, func(tx pgx.Tx) error {
+	var after []func(context.Context)
+	err = db.InTx(r.Context(), s.Pool, func(tx pgx.Tx) error {
 		q := s.Q.WithTx(tx)
 		if _, err := q.RecordWebhook(r.Context(), store.RecordWebhookParams{Provider: s.Provider.Name(), EventID: evt.ID, Payload: raw}); errors.Is(err, pgx.ErrNoRows) {
 			return nil // duplicate delivery: already applied
 		} else if err != nil {
 			return err
 		}
-		if err := s.apply(r.Context(), tx, q, evt); err != nil {
+		fn, err := s.apply(r.Context(), tx, q, evt)
+		if err != nil {
 			return err
+		}
+		if fn != nil {
+			after = append(after, fn)
 		}
 		return q.MarkWebhookProcessed(r.Context(), store.MarkWebhookProcessedParams{Provider: s.Provider.Name(), EventID: evt.ID})
 	})
+	if err != nil {
+		return err
+	}
+	for _, fn := range after {
+		fn(context.WithoutCancel(r.Context()))
+	}
+	return nil
 }
 
-func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e provider.Event) error {
+func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e provider.Event) (func(context.Context), error) {
 	switch e.Type {
 	case "payment.captured", "payment.failed":
 		p, err := q.GetPaymentByProviderOrder(ctx, ptr(e.Str("orderId")))
 		if errors.Is(err, pgx.ErrNoRows) {
 			s.Log.Warn("webhook for unknown payment", "event", e.ID, "order", e.Str("orderId"))
-			return nil
+			return nil, nil
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		method := store.NullPayMethod{PayMethod: store.PayMethod(e.Str("method")), Valid: e.Str("method") != ""}
 		var updated store.Payment
@@ -147,16 +169,21 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 			updated, err = q.MarkPaymentFailed(ctx, store.MarkPaymentFailedParams{ID: p.ID, ProviderPaymentID: ptr(e.Str("paymentId")), Method: method, FailureCode: ptr(e.Str("failureCode"))})
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil // already in a final state
+			return nil, nil // already in a final state
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
-		_, err = outbox.Add(ctx, tx, topic, updated.Ref, map[string]any{
+		if _, err = outbox.Add(ctx, tx, topic, updated.Ref, map[string]any{
 			"paymentId": updated.ID, "purpose": updated.Purpose, "ref": updated.Ref, "amountPaise": updated.AmountPaise,
 			"status": updated.Status, "failureCode": e.Str("failureCode"), "mandateId": e.Str("mandateId"),
-		})
-		return err
+		}); err != nil {
+			return nil, err
+		}
+		if hook := s.Hooks[updated.Purpose]; hook != nil {
+			return hook(ctx, tx, q, updated)
+		}
+		return nil, nil
 	case "refund.processed", "refund.failed":
 		status := "REFUNDED"
 		if e.Type == "refund.failed" {
@@ -164,19 +191,19 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 		}
 		r, err := q.MarkRefundDone(ctx, store.MarkRefundDoneParams{ProviderRefundID: ptr(e.Str("refundId")), Status: status})
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
+			return nil, nil
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		_, err = outbox.Add(ctx, tx, TopicRefunded, r.Ref, map[string]any{"refundId": r.ID, "paymentId": r.PaymentID, "ref": r.Ref, "amountPaise": r.AmountPaise, "status": r.Status})
-		return err
+		return nil, err
 	case "mandate.active", "mandate.failed", "mandate.revoked":
 		_, err := outbox.Add(ctx, tx, e.Type, e.Str("mandateId"), e.Data) // membership (M3) reacts
-		return err
+		return nil, err
 	}
 	s.Log.Info("webhook ignored", "type", e.Type, "event", e.ID)
-	return nil
+	return nil, nil
 }
 
 func ptr(s string) *string {

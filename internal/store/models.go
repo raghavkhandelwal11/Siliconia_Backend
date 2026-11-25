@@ -193,6 +193,55 @@ func (ns NullPayMethod) Value() (driver.Value, error) {
 	return string(ns.PayMethod), nil
 }
 
+type SubStatus string
+
+const (
+	SubStatusPENDINGPAYMENT SubStatus = "PENDING_PAYMENT"
+	SubStatusCONFIRMED      SubStatus = "CONFIRMED"
+	SubStatusPACKED         SubStatus = "PACKED"
+	SubStatusSHIPPED        SubStatus = "SHIPPED"
+	SubStatusOUTFORDELIVERY SubStatus = "OUT_FOR_DELIVERY"
+	SubStatusDELIVERED      SubStatus = "DELIVERED"
+	SubStatusEXPIRED        SubStatus = "EXPIRED"
+	SubStatusCANCELLED      SubStatus = "CANCELLED"
+	SubStatusRTO            SubStatus = "RTO"
+)
+
+func (e *SubStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SubStatus(s)
+	case string:
+		*e = SubStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SubStatus: %T", src)
+	}
+	return nil
+}
+
+type NullSubStatus struct {
+	SubStatus SubStatus `json:"subStatus"`
+	Valid     bool      `json:"valid"` // Valid is true if SubStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSubStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.SubStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SubStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSubStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SubStatus), nil
+}
+
 type Account struct {
 	ID              uuid.UUID      `json:"id"`
 	Role            AccountRole    `json:"role"`
@@ -209,6 +258,20 @@ type Account struct {
 	IsSynthetic     bool           `json:"isSynthetic"`
 	CreatedAt       time.Time      `json:"createdAt"`
 	Version         int32          `json:"version"`
+}
+
+type Address struct {
+	ID        uuid.UUID `json:"id"`
+	AccountID uuid.UUID `json:"accountId"`
+	Name      string    `json:"name"`
+	Phone     string    `json:"phone"`
+	Line1     string    `json:"line1"`
+	Line2     string    `json:"line2"`
+	City      string    `json:"city"`
+	State     string    `json:"state"`
+	Pincode   string    `json:"pincode"`
+	IsDefault bool      `json:"isDefault"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type AuditLog struct {
@@ -308,6 +371,52 @@ type KycRecord struct {
 	CheckedAt    time.Time `json:"checkedAt"`
 }
 
+type Order struct {
+	ID                 uuid.UUID  `json:"id"`
+	Number             string     `json:"number"`
+	BuyerID            uuid.UUID  `json:"buyerId"`
+	Address            []byte     `json:"address"`
+	Status             string     `json:"status"`
+	ItemTotalPaise     int64      `json:"itemTotalPaise"`
+	MrpTotalPaise      int64      `json:"mrpTotalPaise"`
+	ShippingPaise      int64      `json:"shippingPaise"`
+	ElectronsUsed      int32      `json:"electronsUsed"`
+	PayablePaise       int64      `json:"payablePaise"`
+	PayMethod          string     `json:"payMethod"`
+	PaymentID          *uuid.UUID `json:"paymentId"`
+	IsMemberAtOrder    bool       `json:"isMemberAtOrder"`
+	ContainsLaunchDeal bool       `json:"containsLaunchDeal"`
+	RulesSnapshot      []byte     `json:"rulesSnapshot"`
+	ExpiresAt          time.Time  `json:"expiresAt"`
+	PlacedAt           time.Time  `json:"placedAt"`
+	ConfirmedAt        *time.Time `json:"confirmedAt"`
+	IsSynthetic        bool       `json:"isSynthetic"`
+}
+
+type OrderItem struct {
+	ID              uuid.UUID  `json:"id"`
+	SubOrderID      uuid.UUID  `json:"subOrderId"`
+	VariantID       uuid.UUID  `json:"variantId"`
+	LotID           uuid.UUID  `json:"lotId"`
+	PriceType       string     `json:"priceType"`
+	LaunchID        *uuid.UUID `json:"launchId"`
+	LaunchClaimID   *uuid.UUID `json:"launchClaimId"`
+	ProductName     string     `json:"productName"`
+	ProductSlug     string     `json:"productSlug"`
+	VariantAttrs    []byte     `json:"variantAttrs"`
+	CoverKey        string     `json:"coverKey"`
+	Qty             int32      `json:"qty"`
+	UnitMrpPaise    int64      `json:"unitMrpPaise"`
+	UnitPricePaise  int64      `json:"unitPricePaise"`
+	LineTotalPaise  int64      `json:"lineTotalPaise"`
+	GstRateBps      int32      `json:"gstRateBps"`
+	Hsn             *string    `json:"hsn"`
+	CommissionBps   int32      `json:"commissionBps"`
+	ElectronsSpent  int32      `json:"electronsSpent"`
+	ElectronsEarned int32      `json:"electronsEarned"`
+	Status          string     `json:"status"`
+}
+
 type OtpChallenge struct {
 	ID         uuid.UUID       `json:"id"`
 	PhoneE164  string          `json:"phoneE164"`
@@ -346,6 +455,7 @@ type Payment struct {
 	CapturedAt        *time.Time    `json:"capturedAt"`
 	CreatedAt         time.Time     `json:"createdAt"`
 	UpdatedAt         time.Time     `json:"updatedAt"`
+	CheckoutUrl       *string       `json:"checkoutUrl"`
 }
 
 type ProcessedEvent struct {
@@ -439,6 +549,19 @@ type Session struct {
 	LastUsedAt      time.Time       `json:"lastUsedAt"`
 	ExpiresAt       time.Time       `json:"expiresAt"`
 	RevokedAt       *time.Time      `json:"revokedAt"`
+}
+
+type SubOrder struct {
+	ID                 uuid.UUID  `json:"id"`
+	OrderID            uuid.UUID  `json:"orderId"`
+	SellerID           uuid.UUID  `json:"sellerId"`
+	Status             SubStatus  `json:"status"`
+	SubtotalPaise      int64      `json:"subtotalPaise"`
+	InvoiceNo          *string    `json:"invoiceNo"`
+	DeliveredAt        *time.Time `json:"deliveredAt"`
+	ReturnWindowEndsAt *time.Time `json:"returnWindowEndsAt"`
+	SettledAt          *time.Time `json:"settledAt"`
+	Version            int32      `json:"version"`
 }
 
 type Upload struct {
