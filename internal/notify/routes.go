@@ -38,6 +38,8 @@ var templates = map[string]channels{
 	"membership_predebit":     {sms: true, whatsapp: true, email: true},
 	"membership_lapsed":       {sms: true, email: true},
 	"electrons_available":     {whatsapp: true},
+	"payout_paid":             {sms: true, email: true},
+	"health_alert":            {sms: true, email: true},
 }
 
 // Notice is one message for one account.
@@ -129,6 +131,28 @@ func route(ctx context.Context, q *store.Queries, topic string, raw []byte) ([]N
 		}
 		return []Notice{{Account: acc, Template: "cashout_paid", Title: "Cash-out failed",
 			Body: "Your bank transfer failed, so your Electrons are back in your balance. Check your bank details.", Link: "/creator"}}, nil
+	case "payout.finished":
+		acc, ok := p.id("accountId")
+		if !ok {
+			return nil, nil
+		}
+		if p.str("status") == "PAID" {
+			return []Notice{{Account: acc, Template: "payout_paid", Title: "Payout sent",
+				Body: rupees(p.num("net")) + " has been sent to your bank account.", Link: "/seller/payouts"}}, nil
+		}
+		return []Notice{{Account: acc, Template: "payout_paid", Title: "Payout failed",
+			Body: "Your payout could not be sent. Check your bank details; it will be retried in the next weekly batch.", Link: "/seller/payouts"}}, nil
+	case "health.incident_opened":
+		admins, err := q.AdminIDs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]Notice, 0, len(admins))
+		for _, a := range admins {
+			out = append(out, Notice{Account: a, Template: "health_alert", Title: "Health check failing: " + p.str("check"),
+				Body: "Siliconics check " + p.str("check") + " failed twice in a row.", Link: "/admin/health"})
+		}
+		return out, nil
 	case "membership.activated", "membership.predebit", "membership.lapsed", "electrons.lot_available":
 		return m3Notice(topic, p)
 	}

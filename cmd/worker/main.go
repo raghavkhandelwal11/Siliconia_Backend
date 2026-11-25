@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/admin"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/electrons"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
@@ -163,6 +165,39 @@ func main() {
 	})
 	mux.HandleFunc(jobs.TypeCashoutBatch, func(ctx context.Context, _ *asynq.Task) error {
 		_, err := prog.Batch(ctx)
+		return err
+	})
+	m5 := &admin.Service{Pool: pool, Q: q, Box: box, Payout: prog.Payout, Log: log}
+	gateway := paymentprovider.NewSim(cfg.SimPayURL, cfg.SimPayAPIKey, []byte(cfg.SimPayWebhookSecret))
+	monitor := &admin.Monitor{Svc: m5, APIURL: cfg.SyntheticAPIURL, Client: &http.Client{Timeout: 10 * time.Second},
+		Sims: map[string]string{"sim-pay": cfg.SimPayURL, "sim-ship": cfg.SimShipURL, "sim-kyc": cfg.SimKYCURL, "sim-payout": cfg.SimPayoutURL}}
+	mux.HandleFunc(jobs.TypePayoutBatch, func(ctx context.Context, _ *asynq.Task) error {
+		id, err := m5.CreateBatch(ctx, nil)
+		if errors.Is(err, admin.ErrNothingDue) {
+			return nil
+		}
+		log.Info("payout batch drafted", "id", id)
+		return err
+	})
+	mux.HandleFunc(jobs.TypeVerifiedTags, func(ctx context.Context, _ *asynq.Task) error {
+		n, err := m5.RefreshVerifiedTags(ctx)
+		log.Info("verified tags refreshed", "changed", n)
+		return err
+	})
+	mux.HandleFunc(jobs.TypeSynthetic, func(ctx context.Context, _ *asynq.Task) error { return monitor.Run(ctx) })
+	mux.HandleFunc(jobs.TypeReconcile, func(ctx context.Context, _ *asynq.Task) error {
+		n, err := m5.Reconcile(ctx, gateway, time.Now().In(time.FixedZone("IST", 19800)).AddDate(0, 0, -1))
+		log.Info("reconciliation", "issues", n)
+		return err
+	})
+	mux.HandleFunc(jobs.TypeLedgerCheck, func(ctx context.Context, _ *asynq.Task) error {
+		n, err := m5.CheckLedger(ctx)
+		log.Info("ledger invariant", "mismatches", n)
+		return err
+	})
+	mux.HandleFunc(jobs.TypePurge, func(ctx context.Context, _ *asynq.Task) error {
+		n, err := m5.Purge(ctx)
+		log.Info("retention purge", "deleted", n)
 		return err
 	})
 	mux.HandleFunc(jobs.TypeDemoOverdue, func(ctx context.Context, _ *asynq.Task) error { return q.OverdueDemos(ctx) })

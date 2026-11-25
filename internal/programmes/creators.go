@@ -47,6 +47,9 @@ type Service struct {
 	Courier shipprovider.Provider
 	Payout  *payout.Sim
 	Log     *slog.Logger
+	// SellerPayout settles seller payout events (refs "PO-…") inside the
+	// webhook's transaction; the payouts package owns that flow.
+	SellerPayout func(ctx context.Context, tx pgx.Tx, e payout.Event) error
 }
 
 func newID() uuid.UUID {

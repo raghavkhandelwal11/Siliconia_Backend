@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 1.6.0
+  version: 1.7.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -2972,6 +2972,517 @@ paths:
         "400": { description: Bad signature or malformed event }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { description: Not applied; the provider retries }
+  /legal/{kind}:
+    get:
+      operationId: getLegal
+      summary: "Latest version of a legal document"
+      tags: [legal]
+      security: []
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalDoc" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /me/legal/pending:
+    get:
+      operationId: pendingLegal
+      summary: "Terms and privacy versions this account has not accepted"
+      tags: [legal]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalDocList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /me/legal/accept:
+    post:
+      operationId: acceptLegal
+      summary: "Accept legal documents"
+      tags: [legal]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [docIds]
+              properties:
+                docIds: { type: array, items: { type: string, format: uuid }, minItems: 1, maxItems: 10 }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/payouts:
+    get:
+      operationId: sellerPayouts
+      summary: "The seller's payouts"
+      tags: [payouts]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PayoutList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/payouts/{id}/statement.csv:
+    get:
+      operationId: sellerStatement
+      summary: "Payout statement (CSV)"
+      tags: [payouts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/overview:
+    get:
+      operationId: adminOverview
+      summary: "Console overview counts"
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOverview" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/accounts:
+    get:
+      operationId: adminAccounts
+      summary: "Search accounts"
+      tags: [admin]
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string } }
+        - { name: role, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/accounts/{id}/status:
+    post:
+      operationId: setAccountStatus
+      summary: "Suspend or reactivate an account"
+      tags: [admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [suspend]
+              properties:
+                suspend: { type: boolean }
+                reason: { type: string }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/orders:
+    get:
+      operationId: adminOrders
+      summary: "Orders"
+      tags: [admin]
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/returns:
+    get:
+      operationId: adminReturns
+      summary: "Returns"
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/payout-batches:
+    get:
+      operationId: listBatches
+      summary: "Payout batches"
+      tags: [payouts]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createBatch
+      summary: "Draft a payout batch now"
+      tags: [payouts]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Created" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/payout-batches/{id}:
+    get:
+      operationId: batchPayouts
+      summary: "Payouts in a batch"
+      tags: [payouts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/payout-batches/{id}/{action}:
+    post:
+      operationId: batchAction
+      summary: "Approve, release or cancel a batch"
+      tags: [payouts]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: action, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/payouts/{id}/statement.csv:
+    get:
+      operationId: adminStatement
+      summary: "Payout statement (CSV)"
+      tags: [payouts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/config:
+    get:
+      operationId: listConfig
+      summary: "Configuration"
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/config/{key}:
+    put:
+      operationId: setConfig
+      summary: "Change a setting (optimistic version check)"
+      tags: [admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value, version]
+              properties:
+                value: {}
+                version: { type: integer }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/config/{key}/history:
+    get:
+      operationId: configHistory
+      summary: "Setting history"
+      tags: [admin]
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/categories:
+    get:
+      operationId: adminCategories
+      summary: "Categories with commission and GST"
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/categories/{id}/rates:
+    put:
+      operationId: setCategoryRates
+      summary: "Set category commission and GST"
+      tags: [admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstRateBps]
+              properties:
+                commissionBps: { type: [integer, "null"] }
+                gstRateBps: { type: integer }
+                hsn: { type: [string, "null"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Object" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/legal:
+    get:
+      operationId: adminLegal
+      summary: "Latest legal documents"
+      tags: [legal]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalDocList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: publishLegal
+      summary: "Publish a new version"
+      tags: [legal]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, title, bodyMd]
+              properties:
+                kind: { type: string, enum: [TERMS, PRIVACY, SELLER_TERMS, CREATOR_TERMS, RETURNS] }
+                title: { type: string }
+                bodyMd: { type: string }
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegalDoc" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/audit:
+    get:
+      operationId: auditLog
+      summary: "Audit log"
+      tags: [admin]
+      parameters:
+        - { name: targetType, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/reports/{name}.csv:
+    get:
+      operationId: adminReport
+      summary: "Report as CSV (orders, payouts, audit)"
+      tags: [admin]
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/ledger-adjustments:
+    get:
+      operationId: listAdjustments
+      summary: "Electrons adjustment requests"
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: requestAdjustment
+      summary: "Request an Electrons adjustment"
+      tags: [admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId, amount, reason]
+              properties:
+                accountId: { type: string, format: uuid }
+                amount: { type: integer }
+                reason: { type: string }
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Object" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/ledger-adjustments/{id}/decision:
+    post:
+      operationId: decideAdjustment
+      summary: "Apply or reject (a different admin)"
+      tags: [admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approve]
+              properties:
+                approve: { type: boolean }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/health:
+    get:
+      operationId: adminHealth
+      summary: "Synthetic checks and incidents"
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthDashboard" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/recon-issues:
+    get:
+      operationId: reconIssues
+      summary: "Payment reconciliation differences"
+      tags: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 components:
   requestBodies:
     IssueMessage:
@@ -3948,6 +4459,79 @@ components:
         profitPaise: { type: integer, format: int64 }
         dealDiscountBps: { type: integer }
         minProfitBps: { type: integer }
+    LegalDoc:
+      type: object
+      required: [id, kind, version, title, bodyMd, publishedAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string }
+        version: { type: integer }
+        title: { type: string }
+        bodyMd: { type: string }
+        publishedAt: { type: string, format: date-time }
+    LegalDocList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/LegalDoc" } }
+    Payout:
+      type: object
+      required: [id, batchId, grossPaise, commissionPaise, tdsPaise, netPaise, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        batchId: { type: string, format: uuid }
+        grossPaise: { type: integer, format: int64 }
+        commissionPaise: { type: integer, format: int64 }
+        tdsPaise: { type: integer, format: int64 }
+        netPaise: { type: integer, format: int64 }
+        status: { type: string, enum: [DRAFT, PROCESSING, PAID, FAILED, CANCELLED] }
+        bankRef: { type: [string, "null"] }
+        failureReason: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+    PayoutList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Payout" } }
+    AdminOverview:
+      type: object
+      required: [ordersToday, revenueToday, approvalsWaiting, issuesOverdue, issuesOpen, returnsWaiting, openIncidents, batchesWaiting]
+      properties:
+        ordersToday: { type: integer }
+        revenueToday: { type: integer, format: int64 }
+        approvalsWaiting: { type: integer }
+        issuesOverdue: { type: integer }
+        issuesOpen: { type: integer }
+        returnsWaiting: { type: integer }
+        openIncidents: { type: integer }
+        batchesWaiting: { type: integer }
+    HealthDashboard:
+      type: object
+      required: [checks, incidents]
+      properties:
+        checks:
+          type: array
+          items:
+            type: object
+            required: [checkName, lastOk, lastAt, avgLatencyMs, uptime30d]
+            properties:
+              checkName: { type: string }
+              lastOk: { type: boolean }
+              lastError: { type: [string, "null"] }
+              lastAt: { type: string, format: date-time }
+              avgLatencyMs: { type: integer }
+              uptime30d: { type: number }
+        incidents:
+          type: array
+          items:
+            type: object
+            required: [id, checkName, openedAt]
+            properties:
+              id: { type: string, format: uuid }
+              checkName: { type: string }
+              openedAt: { type: string, format: date-time }
+              resolvedAt: { type: [string, "null"], format: date-time }
+              lastError: { type: [string, "null"] }
     ItemList:
       type: object
       required: [items]

@@ -74,6 +74,8 @@ services:
   worker:
     <<: *backend
     command: ["/usr/local/bin/worker"]
+    environment:
+      SYNTHETIC_API_URL: "http://api:8080"
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }

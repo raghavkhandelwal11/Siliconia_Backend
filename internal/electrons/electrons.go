@@ -373,3 +373,18 @@ func (s *Service) History(ctx context.Context, account uuid.UUID, before *time.T
 	}
 	return out, nil
 }
+
+// Credit adds Electrons that are spendable at once (admin adjustments). The
+// lot expires after the configured period like any matured lot.
+func Credit(ctx context.Context, q *store.Queries, account uuid.UUID, source, ledgerType, refType string, ref uuid.UUID, amount int32, note string) error {
+	now := time.Now()
+	exp := now.AddDate(0, expiryMonths(ctx, q), 0)
+	lot, err := q.CreateLot(ctx, store.CreateLotParams{ID: newID(), AccountID: account, Source: source, SourceRef: ref, Amount: amount,
+		Remaining: amount, Status: store.LotStatusAVAILABLE, AvailableAt: &now, ExpiresAt: &exp})
+	if err != nil {
+		return err
+	}
+	_, err = q.AddLedger(ctx, store.AddLedgerParams{ID: newID(), AccountID: account, Type: ledgerType, Amount: amount, LotID: &lot.ID,
+		RefType: refType, RefID: ref, Note: note})
+	return err
+}

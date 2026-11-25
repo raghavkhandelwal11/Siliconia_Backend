@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/admin"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
@@ -116,6 +117,8 @@ func main() {
 	prog := &programmes.Service{Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL), Courier: shipments.Provider,
 		Payout: payoutprovider.NewSim(cfg.SimPayoutURL, cfg.SimPayoutAPIKey, []byte(cfg.SimPayoutSecret)), Log: log}
 	shipments.Demos = prog.OnDemoTracking
+	m5 := &admin.Service{Pool: pool, Q: authSvc.Q, Box: authSvc.Box, Payout: prog.Payout, Log: log}
+	prog.SellerPayout = m5.OnPayoutEvent
 	shipments.OnDelivered = programmes.RewardPromoters
 	members := &membership.Service{Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log}
 	checkouts := &checkout.Service{Shipping: shipments, Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log, Launches: launches}
@@ -146,6 +149,7 @@ func main() {
 		Notify:         &notify.Handler{Svc: &notify.Service{Pool: pool, Q: authSvc.Q, Log: log}, Redis: rdb},
 		M3:             &m3http.Handler{Electrons: &electrons.Service{Pool: pool, Q: authSvc.Q}, Membership: members, Launches: launches, Redis: rdb},
 		M4:             &m4http.Handler{Reviews: &reviews.Service{Pool: pool, Q: authSvc.Q}, Programmes: prog, Products: products},
+		M5:             &admin.Handler{Svc: m5},
 		Orders:         &orders.Handler{Svc: &orders.Service{Pool: pool, Q: authSvc.Q, Payments: payments, Log: log}},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{

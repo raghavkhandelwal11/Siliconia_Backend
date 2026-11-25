@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/admin"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
@@ -116,7 +117,7 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments, issues, notifications, notification_prefs, launches, reviews, creator_profiles, demo_requests, creator_reviews, reward_pools, cashout_requests, promoter_profiles, promoter_investments, promotions, promoter_reward_rules, products_of_week, product_feedback, memberships, membership_purchases, electron_lots, ledger_entries CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments, issues, notifications, notification_prefs, launches, reviews, creator_profiles, demo_requests, creator_reviews, reward_pools, cashout_requests, promoter_profiles, promoter_investments, promotions, promoter_reward_rules, products_of_week, product_feedback, memberships, membership_purchases, electron_lots, ledger_entries, synthetic_runs, incidents, recon_issues, config, config_history CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := catalogue.Seed(ctx, pool); err != nil {
@@ -161,6 +162,7 @@ func setup(t *testing.T) *env {
 		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships}, Orders: &orders.Handler{Svc: ord}, Returns: &returns.Handler{Svc: ret}, Issues: &issues.Handler{Svc: iss}, Notify: &notify.Handler{Svc: note, Redis: rdb, StreamFor: 3 * time.Second},
 		M3: &m3http.Handler{Electrons: led, Membership: mem, Launches: lau, Redis: rdb},
 		M4: &m4http.Handler{Reviews: rev, Programmes: prog, Products: prods},
+		M5: &admin.Handler{Svc: &admin.Service{Pool: pool, Q: q, Box: box2, Log: log}},
 	}))
 	t.Cleanup(srv.Close)
 	sim := simpay.New(simpay.Config{PublicURL: "http://shop.test", APIKey: "k", WebhookURL: srv.URL + "/api/v1/webhooks/payment",

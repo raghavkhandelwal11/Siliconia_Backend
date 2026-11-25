@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -170,4 +171,23 @@ func (s *Sim) VerifyWebhook(r *http.Request) (Event, error) {
 		return Event{}, errors.New("payment: malformed event")
 	}
 	return e, nil
+}
+
+// Settled is one captured payment in the gateway's daily settlement report.
+type Settled struct {
+	Ref    string `json:"ref"`
+	Amount int64  `json:"amount"`
+	Status string `json:"status"`
+}
+
+// Settlement reads the gateway's report for an IST day (YYYY-MM-DD). It is
+// not part of Provider: reconciliation needs it, checkout does not.
+func (s *Sim) Settlement(ctx context.Context, date string) ([]Settled, error) {
+	var out struct {
+		Payments []Settled `json:"payments"`
+	}
+	if err := s.call(ctx, http.MethodGet, "/v1/settlements?date="+url.QueryEscape(date), nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Payments, nil
 }
