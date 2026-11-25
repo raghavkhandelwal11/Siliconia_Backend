@@ -98,10 +98,10 @@ FROM orders o WHERE o.buyer_id = $1 ORDER BY o.placed_at DESC LIMIT 100;
 
 -- name: ListSubOrders :many
 SELECT s.*, sp.store_name FROM sub_orders s JOIN seller_profiles sp ON sp.account_id = s.seller_id
-WHERE s.order_id = $1 ORDER BY sp.store_name;
+WHERE s.order_id = $1 ORDER BY sp.store_name, s.replaces_item_id IS NOT NULL, s.id;
 
 -- name: ListOrderItems :many
-SELECT i.* FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.order_id = $1;
+SELECT i.* FROM order_items i JOIN sub_orders s ON s.id = i.sub_order_id WHERE s.order_id = $1 ORDER BY i.id;
 
 -- name: ConfirmOrder :exec
 UPDATE orders SET status = 'CONFIRMED', confirmed_at = now() WHERE id = $1;
