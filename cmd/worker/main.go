@@ -10,6 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/jobs"
@@ -69,7 +70,16 @@ func main() {
 		log.Debug("heartbeat")
 		return nil
 	})
-	checkouts := &checkout.Service{Pool: pool, Q: store.New(pool), Log: log}
+	q := store.New(pool)
+	checkouts := &checkout.Service{Pool: pool, Q: q, Log: log}
+	issueSvc := &issues.Service{Pool: pool, Q: q, Log: log}
+	mux.HandleFunc(jobs.TypeCloseIssues, func(ctx context.Context, _ *asynq.Task) error {
+		n, err := issueSvc.CloseResolved(ctx)
+		if n > 0 {
+			log.Info("closed resolved issues", "count", n)
+		}
+		return err
+	})
 	mux.HandleFunc(jobs.TypeExpireOrders, func(ctx context.Context, _ *asynq.Task) error {
 		n, err := checkouts.Sweep(ctx)
 		if n > 0 {

@@ -20,6 +20,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
@@ -35,6 +36,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	paymentprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payment"
 	shippingprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/shipping"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/returns"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/search"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
@@ -99,6 +101,8 @@ func main() {
 	}
 	shipments := &shipping.Service{Pool: pool, Q: authSvc.Q, Log: log,
 		Provider: shippingprovider.NewSim(cfg.SimShipURL, cfg.SimShipAPIKey, []byte(cfg.SimShipWebhookSecret))}
+	returnSvc := &returns.Service{Pool: pool, Q: authSvc.Q, Courier: shipments.Provider, Payments: payments, Log: log}
+	shipments.Returns = returnSvc.OnTracking
 	checkouts := &checkout.Service{Shipping: shipments, Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log}
 	payments.Hooks = map[string]payment.Hook{"ORDER": checkouts.OnPayment}
 	products := &product.Service{Pool: pool, Q: authSvc.Q, Store: media, Limiter: limiter, Log: log}
@@ -122,6 +126,8 @@ func main() {
 		Payment:        &payment.Handler{Svc: payments},
 		Checkout:       &checkout.Handler{Svc: checkouts},
 		Shipping:       &shipping.Handler{Svc: shipments},
+		Returns:        &returns.Handler{Svc: returnSvc},
+		Issues:         &issues.Handler{Svc: &issues.Service{Pool: pool, Q: authSvc.Q, Log: log}},
 		Orders:         &orders.Handler{Svc: &orders.Service{Pool: pool, Q: authSvc.Q, Payments: payments, Log: log}},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{

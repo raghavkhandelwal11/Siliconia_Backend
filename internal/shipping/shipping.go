@@ -38,6 +38,8 @@ type Service struct {
 	Q        *store.Queries
 	Provider provider.Provider
 	Log      *slog.Logger
+	// Returns applies scans on return pickups (the returns module).
+	Returns func(ctx context.Context, tx pgx.Tx, q *store.Queries, sh store.Shipment, status string) (after func(context.Context), err error)
 
 	cache sync.Map // pincode → cached
 }
@@ -174,6 +176,9 @@ func (s *Service) Ship(ctx context.Context, seller, subOrderID uuid.UUID, weight
 			FromStatus: []string{"CONFIRMED", "PACKED"}}); err != nil {
 			return err
 		}
+		if err := q.MarkReplacementShipped(ctx, &subOrderID); err != nil {
+			return err
+		}
 		out = view(sh)
 		_, err = outbox.Add(ctx, tx, TopicStatusChanged, subOrderID.String(), map[string]any{
 			"subOrderId": subOrderID, "orderId": so.OrderID, "number": so.Number, "status": store.SubStatusSHIPPED, "awb": sh.Awb})
@@ -228,21 +233,28 @@ func (s *Service) HandleWebhook(r *http.Request) error {
 		return err
 	}
 	ctx := r.Context()
-	return db.InTx(ctx, s.Pool, func(tx pgx.Tx) error {
+	var after []func(context.Context)
+	err = db.InTx(ctx, s.Pool, func(tx pgx.Tx) error {
 		q := s.Q.WithTx(tx)
 		if _, err := q.RecordWebhook(ctx, store.RecordWebhookParams{Provider: s.Provider.Name(), EventID: e.ID, Payload: e.Raw}); errors.Is(err, pgx.ErrNoRows) {
 			return nil // duplicate delivery
 		} else if err != nil {
 			return err
 		}
-		if err := s.apply(ctx, tx, q, e); err != nil {
+		if err := s.apply(ctx, tx, q, e, &after); err != nil {
 			return err
 		}
 		return q.MarkWebhookProcessed(ctx, store.MarkWebhookProcessedParams{Provider: s.Provider.Name(), EventID: e.ID})
 	})
+	if err == nil {
+		for _, fn := range after {
+			fn(context.WithoutCancel(ctx))
+		}
+	}
+	return err
 }
 
-func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e provider.Event) error {
+func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e provider.Event, after *[]func(context.Context)) error {
 	sh, err := q.GetShipmentByAWBForUpdate(ctx, e.AWB)
 	if errors.Is(err, pgx.ErrNoRows) {
 		s.Log.Warn("tracking for unknown shipment", "awb", e.AWB)
@@ -266,8 +278,18 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 	if err := q.UpdateShipmentStatus(ctx, store.UpdateShipmentStatusParams{ID: sh.ID, Status: e.Status, Eta: eta, LastEventAt: &e.At}); err != nil {
 		return err
 	}
+	if sh.Kind == provider.Return {
+		if s.Returns == nil {
+			return nil
+		}
+		fn, err := s.Returns(ctx, tx, q, sh, e.Status)
+		if fn != nil {
+			*after = append(*after, fn)
+		}
+		return err
+	}
 	if sh.Kind != provider.Forward {
-		return nil // return pickups are handled by returns (T2.6)
+		return nil
 	}
 	next, ok := subStatus(e.Status)
 	if !ok {

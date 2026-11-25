@@ -587,6 +587,8 @@ func ptr32(n int32) *int32 { return &n }
 type ItemView struct {
 	ID             uuid.UUID         `json:"id"`
 	Status         string            `json:"status"`
+	Return         *ItemReturn       `json:"return,omitempty"`
+	CanReturn      bool              `json:"canReturn"`
 	Name           string            `json:"name"`
 	Slug           string            `json:"slug"`
 	CoverURL       string            `json:"coverUrl,omitempty"`
@@ -612,6 +614,15 @@ type SubOrderView struct {
 	CancelledBy        string        `json:"cancelledBy,omitempty"`
 	CanCancel          bool          `json:"canCancel"`
 	HasInvoice         bool          `json:"hasInvoice"`
+	IsReplacement      bool          `json:"isReplacement"`
+}
+
+// ItemReturn is the latest return or replacement asked for an item.
+type ItemReturn struct {
+	ID     uuid.UUID `json:"id"`
+	Number string    `json:"number"`
+	Type   string    `json:"type"`
+	Status string    `json:"status"`
 }
 
 // Event is one step in a sub-order's history (the buyer timeline).
@@ -694,11 +705,17 @@ func (s *Service) Order(ctx context.Context, buyer, id uuid.UUID) (OrderView, er
 	if err != nil {
 		return OrderView{}, err
 	}
+	rets, err := s.Q.ListOrderReturns(ctx, id)
+	if err != nil {
+		return OrderView{}, err
+	}
 	for _, sub := range subs {
 		sv := SubOrderView{ID: sub.ID, StoreName: sub.StoreName, Status: string(sub.Status), SubtotalPaise: sub.SubtotalPaise, Items: []ItemView{},
 			DeliveredAt: sub.DeliveredAt, ReturnWindowEndsAt: sub.ReturnWindowEndsAt, Events: []Event{},
-			CanCancel:  sub.Status == store.SubStatusCONFIRMED || sub.Status == store.SubStatusPACKED,
-			HasInvoice: sub.Status == store.SubStatusSHIPPED || sub.Status == store.SubStatusOUTFORDELIVERY || sub.Status == store.SubStatusDELIVERED || sub.Status == store.SubStatusRTO}
+			CanCancel:     sub.Status == store.SubStatusCONFIRMED || sub.Status == store.SubStatusPACKED,
+			IsReplacement: sub.ReplacesItemID != nil,
+			HasInvoice: sub.ReplacesItemID == nil && (sub.Status == store.SubStatusSHIPPED || sub.Status == store.SubStatusOUTFORDELIVERY ||
+				sub.Status == store.SubStatusDELIVERED || sub.Status == store.SubStatusRTO)}
 		if sub.CancelReason != nil {
 			sv.CancelReason = *sub.CancelReason
 		}
@@ -734,6 +751,14 @@ func (s *Service) Order(ctx context.Context, buyer, id uuid.UUID) (OrderView, er
 			iv := ItemView{ID: it.ID, Status: it.Status, Name: it.ProductName, Slug: it.ProductSlug, Qty: it.Qty, UnitPricePaise: it.UnitPricePaise, UnitMrpPaise: it.UnitMrpPaise,
 				LineTotalPaise: it.LineTotalPaise, Attrs: map[string]string{}}
 			_ = json.Unmarshal(it.VariantAttrs, &iv.Attrs)
+			for _, rr := range rets { // newest last wins
+				if rr.OrderItemID == it.ID {
+					iv.Return = &ItemReturn{ID: rr.ID, Number: rr.Number, Type: rr.Type, Status: rr.Status}
+				}
+			}
+			open := iv.Return != nil && iv.Return.Status != "REJECTED"
+			iv.CanReturn = it.Status == "ACTIVE" && !open && sub.Status == store.SubStatusDELIVERED &&
+				sub.ReturnWindowEndsAt != nil && time.Now().Before(*sub.ReturnWindowEndsAt)
 			if it.CoverKey != "" {
 				iv.CoverURL = "/api/v1/media/" + it.CoverKey
 			}

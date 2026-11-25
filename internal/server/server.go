@@ -13,12 +13,14 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/returns"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/search"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/shipping"
@@ -45,6 +47,8 @@ type Deps struct {
 	Checkout    *checkout.Handler
 	Shipping    *shipping.Handler
 	Orders      *orders.Handler
+	Returns     *returns.Handler
+	Issues      *issues.Handler
 }
 
 // New returns the root handler.
@@ -108,6 +112,12 @@ func New(d Deps) http.Handler {
 				}
 				if d.Orders != nil {
 					d.Orders.Routes(api)
+				}
+				if d.Returns != nil {
+					d.Returns.Routes(api)
+				}
+				if d.Issues != nil {
+					d.Issues.Routes(api)
 				}
 
 			})
