@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -409,6 +409,48 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /categories:
+    get:
+      operationId: listCategories
+      summary: The category tree (12 categories with their sub-categories)
+      description: Cached for 60 s; send If-None-Match with the ETag to get 304 when unchanged.
+      tags: [catalogue]
+      security: []
+      responses:
+        "200":
+          description: Active categories, in menu order
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [categories]
+                properties:
+                  categories:
+                    type: array
+                    items: { $ref: "#/components/schemas/CategoryNode" }
+        "304": { description: Not modified }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /categories/{slug}:
+    get:
+      operationId: getCategory
+      summary: One category with its parent, sub-categories and spec schema
+      tags: [catalogue]
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Category
+          headers:
+            ETag: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategoryDetail" }
+        "304": { description: Not modified }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 components:
   securitySchemes:
     sessionCookie:
@@ -448,6 +490,51 @@ components:
         createdAt: { type: string, format: date-time }
         lastUsedAt: { type: string, format: date-time }
         current: { type: boolean }
+    CategoryNode:
+      type: object
+      required: [id, slug, name]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        icon: { type: string, description: Icon key for top-level categories }
+        examples: { type: string, description: Example products for sub-categories }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/CategoryNode" }
+    CategoryDetail:
+      type: object
+      required: [id, slug, name, children, specSchema]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        icon: { type: string }
+        examples: { type: string }
+        parent: { $ref: "#/components/schemas/CategoryNode" }
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/CategoryNode" }
+        specSchema: { $ref: "#/components/schemas/SpecSchema" }
+    SpecSchema:
+      type: object
+      required: [fields]
+      properties:
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/SpecField" }
+    SpecField:
+      type: object
+      required: [key, label, type]
+      properties:
+        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,39}$" }
+        label: { type: string }
+        type: { type: string, enum: [number, text, enum, multi, boolean] }
+        unit: { type: string }
+        options: { type: array, items: { type: string } }
+        required: { type: boolean }
+        filter: { type: boolean, description: Offered as a listing filter }
+        main: { type: boolean, description: "Shown in main specifications (at most 3)" }
     Health:
       type: object
       required: [status, version, mode]

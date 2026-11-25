@@ -1,6 +1,6 @@
 // Command seed loads default business settings (TRS section 7, LLD 4.7).
 // It is safe to run repeatedly: existing keys are left unchanged.
-// Catalogue and demo data are added by later tasks (T1.4, T6.5).
+// It also inserts the 12 default categories (T1.4). Demo data comes with T6.5.
 package main
 
 import (
@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/logx"
@@ -66,5 +67,10 @@ func main() {
 		}
 		inserted += int(tag.RowsAffected())
 	}
-	log.Info("seed done", "config_inserted", inserted, "config_total", len(defaults))
+	cats, err := catalogue.Seed(ctx, pool)
+	if err != nil {
+		log.Error("categories", "err", err)
+		os.Exit(1)
+	}
+	log.Info("seed done", "config_inserted", inserted, "config_total", len(defaults), "categories_inserted", cats)
 }
