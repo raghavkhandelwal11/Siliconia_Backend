@@ -13,6 +13,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 )
 
 // Deps are the shared dependencies modules need. Modules add their routes in
@@ -27,6 +28,7 @@ type Deps struct {
 	AuthService *auth.Service
 	Auth        *auth.Handler
 	Catalogue   *catalogue.Handler
+	Seller      *seller.Handler
 }
 
 // New returns the root handler.
@@ -51,6 +53,9 @@ func New(d Deps) http.Handler {
 			api.Group(func(api chi.Router) {
 				api.Use(auth.Authenticate(d.AuthService), auth.CSRF)
 				d.Auth.Routes(api)
+				if d.Seller != nil {
+					d.Seller.Routes(api)
+				}
 			})
 		}
 	})

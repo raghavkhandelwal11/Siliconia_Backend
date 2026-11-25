@@ -86,6 +86,14 @@ services:
     depends_on: {}
     deploy: { resources: { limits: { memory: 128m } } }
 
+  sim-kyc:
+    <<: *backend
+    command: ["/usr/local/bin/sim-kyc"]
+    environment:
+      HTTP_ADDR: ":9004"
+    depends_on: {}
+    deploy: { resources: { limits: { memory: 128m } } }
+
   caddy:
     image: caddy:2-alpine
     environment:

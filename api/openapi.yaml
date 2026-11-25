@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -451,6 +451,209 @@ paths:
         "304": { description: Not modified }
         "404": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/application:
+    get:
+      operationId: getSellerApplication
+      summary: The seller's onboarding application (created on first visit)
+      tags: [seller]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerApplication" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    put:
+      operationId: saveSellerBusiness
+      summary: Save business details and pickup address (draft or rejected only)
+      description: Changing the legal name clears the PAN and bank checks.
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                businessType: { $ref: "#/components/schemas/BusinessType" }
+                legalName: { type: string, maxLength: 120 }
+                storeName: { type: string, maxLength: 60 }
+                gstin: { type: string }
+                pickupAddress: { $ref: "#/components/schemas/Address" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerApplication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/application/pan:
+    post:
+      operationId: checkSellerPan
+      summary: Verify the PAN against the legal name (KYC provider; 10 checks an hour)
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [pan]
+              properties:
+                pan: { type: string, example: ABCDE1234F }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerApplication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/application/bank:
+    post:
+      operationId: checkSellerBank
+      summary: Penny-drop the payout account against the legal name
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [account, ifsc]
+              properties:
+                account: { type: string }
+                ifsc: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerApplication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/application/submit:
+    post:
+      operationId: submitSellerApplication
+      summary: Submit a complete application for review
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [acceptTerms]
+              properties:
+                acceptTerms: { type: boolean }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerApplication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /admin/approvals/sellers:
+    get:
+      operationId: listSellerApplications
+      summary: Seller approval queue (UI-ADM-02)
+      tags: [admin]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, approved, rejected, draft], default: pending } }
+      responses:
+        "200":
+          description: Applications, oldest submission first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applications]
+                properties:
+                  applications: { type: array, items: { $ref: "#/components/schemas/SellerQueueItem" } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /admin/approvals/sellers/{accountId}:
+    get:
+      operationId: getSellerApplicationForReview
+      summary: One application with KYC results (PAN and bank masked)
+      tags: [admin]
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerReview" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /admin/approvals/sellers/{accountId}/decision:
+    post:
+      operationId: decideSellerApplication
+      summary: Approve or reject; audited, and the seller gets an SMS
+      description: Blocked while the admin is viewing as another role. A rejection needs a reason of at least 10 characters.
+      tags: [admin]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APPROVE, REJECT] }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerReview" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 components:
   securitySchemes:
     sessionCookie:
@@ -535,6 +738,78 @@ components:
         required: { type: boolean }
         filter: { type: boolean, description: Offered as a listing filter }
         main: { type: boolean, description: "Shown in main specifications (at most 3)" }
+    BusinessType:
+      type: string
+      enum: [INDIVIDUAL, PROPRIETORSHIP, PARTNERSHIP, LLP, PRIVATE_LIMITED, PUBLIC_LIMITED]
+    Address:
+      type: object
+      properties:
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string, pattern: "^[1-9][0-9]{5}$" }
+        phone: { type: string }
+    KycCheck:
+      type: object
+      required: [status, nameMatch, checkedAt]
+      properties:
+        status: { type: string, enum: [VERIFIED, FAILED, NAME_MISMATCH] }
+        reason: { type: string }
+        nameMatch: { type: number }
+        checkedAt: { type: string, format: date-time }
+    SellerApplication:
+      type: object
+      required: [accountId, approval, editable, phoneVerified, legalName, storeName, gstinRequired, panVerified, bankVerified, termsVersion, missing]
+      properties:
+        accountId: { type: string, format: uuid }
+        approval: { type: string, enum: [DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, SUSPENDED] }
+        reason: { type: string, description: Admin's reason for the last decision }
+        editable: { type: boolean }
+        phoneVerified: { type: boolean }
+        businessType: { $ref: "#/components/schemas/BusinessType" }
+        legalName: { type: string }
+        storeName: { type: string }
+        gstin: { type: string }
+        gstinRequired: { type: boolean }
+        panLast4: { type: string }
+        panVerified: { type: boolean }
+        bankLast4: { type: string }
+        ifsc: { type: string }
+        bankVerified: { type: boolean }
+        pickupAddress: { $ref: "#/components/schemas/Address" }
+        panCheck: { $ref: "#/components/schemas/KycCheck" }
+        bankCheck: { $ref: "#/components/schemas/KycCheck" }
+        submittedAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
+        termsVersion: { type: string }
+        missing:
+          type: array
+          description: Steps still to do
+          items: { type: string, enum: [phone, business, pan, gstin, bank, pickup] }
+    SellerReview:
+      allOf:
+        - { $ref: "#/components/schemas/SellerApplication" }
+        - type: object
+          required: [gstinMatchesPan]
+          properties:
+            phone: { type: string }
+            gstinMatchesPan: { type: boolean }
+    SellerQueueItem:
+      type: object
+      required: [accountId, approval, legalName, storeName, panVerified, bankVerified, hasGstin]
+      properties:
+        accountId: { type: string, format: uuid }
+        approval: { type: string }
+        businessType: { $ref: "#/components/schemas/BusinessType" }
+        legalName: { type: string }
+        storeName: { type: string }
+        phone: { type: string }
+        panVerified: { type: boolean }
+        bankVerified: { type: boolean }
+        hasGstin: { type: boolean }
+        submittedAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
     Health:
       type: object
       required: [status, version, mode]

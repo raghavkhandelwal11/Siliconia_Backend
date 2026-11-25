@@ -55,7 +55,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with: { go-version-file: go.mod }
-      - run: go test -race -count=1 ./...
+      # -p 1: integration packages share one test database.
+      - run: go test -race -count=1 -p 1 ./...
 
   contract:
     runs-on: ubuntu-latest

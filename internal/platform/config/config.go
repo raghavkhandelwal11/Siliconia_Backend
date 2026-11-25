@@ -40,6 +40,8 @@ type Config struct {
 	ProviderWhatsApp string
 	ProviderEmail    string
 	SimNotifyURL     string
+	ProviderKYC      string
+	SimKYCURL        string
 
 	FeatureTestInbox bool
 
@@ -71,6 +73,8 @@ func Load() (Config, error) {
 		ProviderWhatsApp:        env("PROVIDER_WHATSAPP", "sim"),
 		ProviderEmail:           env("PROVIDER_EMAIL", "log"),
 		SimNotifyURL:            env("SIM_NOTIFY_URL", "http://localhost:9005"),
+		ProviderKYC:             env("PROVIDER_KYC", "sim"),
+		SimKYCURL:               env("SIM_KYC_URL", "http://localhost:9004"),
 		FeatureTestInbox:        envBool("FEATURE_TEST_INBOX", true),
 		GuestRateLimitPerMinute: envInt("RATELIMIT_GUEST_PER_MINUTE", 60),
 		AuthSigningKey:          os.Getenv("AUTH_SIGNING_KEY"),
@@ -103,7 +107,7 @@ func (c Config) validate() error {
 	case ModeLocal, ModeCI, ModePrototype:
 	case ModeProduction:
 		// Production is planned in paid-later/ and is not part of this build.
-		for name, v := range map[string]string{"PROVIDER_SMS": c.ProviderSMS, "PROVIDER_WHATSAPP": c.ProviderWhatsApp} {
+		for name, v := range map[string]string{"PROVIDER_SMS": c.ProviderSMS, "PROVIDER_WHATSAPP": c.ProviderWhatsApp, "PROVIDER_KYC": c.ProviderKYC} {
 			if v == "sim" {
 				return fmt.Errorf("config: %s=sim is not allowed in production mode", name)
 			}
