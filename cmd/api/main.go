@@ -24,6 +24,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/launch"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/m3http"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/m4http"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/membership"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
@@ -37,11 +38,14 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/redisx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/storage"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/programmes"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/kyc"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	paymentprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payment"
+	payoutprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payout"
 	shippingprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/shipping"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/returns"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/reviews"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/search"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
@@ -109,6 +113,10 @@ func main() {
 	returnSvc := &returns.Service{Pool: pool, Q: authSvc.Q, Courier: shipments.Provider, Payments: payments, Log: log}
 	shipments.Returns = returnSvc.OnTracking
 	launches := &launch.Service{Pool: pool, Q: authSvc.Q, Redis: rdb, Limiter: limiter, Secret: []byte("launch-pass:" + cfg.AuthSigningKey), Log: log}
+	prog := &programmes.Service{Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL), Courier: shipments.Provider,
+		Payout: payoutprovider.NewSim(cfg.SimPayoutURL, cfg.SimPayoutAPIKey, []byte(cfg.SimPayoutSecret)), Log: log}
+	shipments.Demos = prog.OnDemoTracking
+	shipments.OnDelivered = programmes.RewardPromoters
 	members := &membership.Service{Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log}
 	checkouts := &checkout.Service{Shipping: shipments, Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log, Launches: launches}
 	payments.Hooks = map[string]payment.Hook{"ORDER": checkouts.OnPayment, "MEMBERSHIP": members.OnPayment, "RENEWAL": members.OnPayment}
@@ -137,6 +145,7 @@ func main() {
 		Issues:         &issues.Handler{Svc: &issues.Service{Pool: pool, Q: authSvc.Q, Log: log}},
 		Notify:         &notify.Handler{Svc: &notify.Service{Pool: pool, Q: authSvc.Q, Log: log}, Redis: rdb},
 		M3:             &m3http.Handler{Electrons: &electrons.Service{Pool: pool, Q: authSvc.Q}, Membership: members, Launches: launches, Redis: rdb},
+		M4:             &m4http.Handler{Reviews: &reviews.Service{Pool: pool, Q: authSvc.Q}, Programmes: prog, Products: products},
 		Orders:         &orders.Handler{Svc: &orders.Service{Pool: pool, Q: authSvc.Q, Payments: payments, Log: log}},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{

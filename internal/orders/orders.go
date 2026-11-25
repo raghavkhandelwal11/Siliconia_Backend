@@ -165,7 +165,7 @@ func (s *Service) SellerDetail(ctx context.Context, seller, id uuid.UUID) (Selle
 		out.Items = append(out.Items, itemView(it))
 		out.ItemCount += it.Qty
 	}
-	if sh, err := s.Q.GetForwardShipment(ctx, id); err == nil {
+	if sh, err := s.Q.GetForwardShipment(ctx, &id); err == nil {
 		out.AWB, out.ShipmentStatus = sh.Awb, sh.Status
 	}
 	evs, err := s.Q.ListSubOrderEvents(ctx, d.OrderID)

@@ -8,7 +8,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 ARG VERSION=dev
-RUN for cmd in api worker migrate seed sim-notify sim-kyc sim-pay sim-ship admin demo; do \
+RUN for cmd in api worker migrate seed sim-notify sim-kyc sim-pay sim-ship sim-payout admin demo; do \
       go build -trimpath -ldflags="-s -w" -o /out/$cmd ./cmd/$cmd; \
     done
 

@@ -70,6 +70,10 @@ var Schedule = []Periodic{
 	{Spec: "0 9 * * *", Type: TypeRenewMemberships, Queue: QueueCritical},
 	{Spec: "@every 5s", Type: TypeLaunchTick, Queue: QueueCritical},
 	{Spec: "@every 1s", Type: TypeLaunchAdmit, Queue: QueueCritical},
+	{Spec: "0 0 * * 1", Type: TypeProductsOfWeek, Queue: QueueLow},
+	{Spec: "0 2 1 * *", Type: TypeSettlePools, Queue: QueueDefault},
+	{Spec: "0 6 * * 1", Type: TypeCashoutBatch, Queue: QueueDefault},
+	{Spec: "30 3 * * *", Type: TypeDemoOverdue, Queue: QueueLow},
 }
 
 // TypeHeartbeat proves the scheduler and worker are alive.
@@ -85,6 +89,14 @@ const (
 	TypeRenewMemberships = "membership:renew"
 	TypeLaunchTick       = "launches:tick"
 	TypeLaunchAdmit      = "launches:admit"
+)
+
+// M4 jobs (LLD 11).
+const (
+	TypeProductsOfWeek = "discovery:products-of-week"
+	TypeSettlePools    = "creators:settle-pools"
+	TypeCashoutBatch   = "creators:cashout-batch"
+	TypeDemoOverdue    = "creators:demo-overdue"
 )
 
 // TypeCloseIssues closes issues resolved more than 7 days ago (LLD 10).

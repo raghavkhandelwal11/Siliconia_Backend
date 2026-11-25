@@ -40,12 +40,12 @@ func (q *Queries) AddTrackingEvent(ctx context.Context, arg AddTrackingEventPara
 const createShipment = `-- name: CreateShipment :one
 INSERT INTO shipments (id, sub_order_id, kind, ref, provider, awb, status, eta, cod_amount_paise)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, sub_order_id, kind, ref, provider, awb, status, eta, cod_amount_paise, last_event_at, created_at, updated_at
+RETURNING id, sub_order_id, kind, ref, provider, awb, status, eta, cod_amount_paise, last_event_at, created_at, updated_at, demo_request_id
 `
 
 type CreateShipmentParams struct {
 	ID             uuid.UUID  `json:"id"`
-	SubOrderID     uuid.UUID  `json:"subOrderId"`
+	SubOrderID     *uuid.UUID `json:"subOrderId"`
 	Kind           string     `json:"kind"`
 	Ref            string     `json:"ref"`
 	Provider       string     `json:"provider"`
@@ -81,15 +81,16 @@ func (q *Queries) CreateShipment(ctx context.Context, arg CreateShipmentParams) 
 		&i.LastEventAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DemoRequestID,
 	)
 	return i, err
 }
 
 const getForwardShipment = `-- name: GetForwardShipment :one
-SELECT id, sub_order_id, kind, ref, provider, awb, status, eta, cod_amount_paise, last_event_at, created_at, updated_at FROM shipments WHERE sub_order_id = $1 AND kind = 'FORWARD' AND status <> 'CANCELLED'
+SELECT id, sub_order_id, kind, ref, provider, awb, status, eta, cod_amount_paise, last_event_at, created_at, updated_at, demo_request_id FROM shipments WHERE sub_order_id = $1 AND kind = 'FORWARD' AND status <> 'CANCELLED'
 `
 
-func (q *Queries) GetForwardShipment(ctx context.Context, subOrderID uuid.UUID) (Shipment, error) {
+func (q *Queries) GetForwardShipment(ctx context.Context, subOrderID *uuid.UUID) (Shipment, error) {
 	row := q.db.QueryRow(ctx, getForwardShipment, subOrderID)
 	var i Shipment
 	err := row.Scan(
@@ -105,12 +106,13 @@ func (q *Queries) GetForwardShipment(ctx context.Context, subOrderID uuid.UUID) 
 		&i.LastEventAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DemoRequestID,
 	)
 	return i, err
 }
 
 const getShipmentByAWBForUpdate = `-- name: GetShipmentByAWBForUpdate :one
-SELECT id, sub_order_id, kind, ref, provider, awb, status, eta, cod_amount_paise, last_event_at, created_at, updated_at FROM shipments WHERE awb = $1 FOR UPDATE
+SELECT id, sub_order_id, kind, ref, provider, awb, status, eta, cod_amount_paise, last_event_at, created_at, updated_at, demo_request_id FROM shipments WHERE awb = $1 FOR UPDATE
 `
 
 func (q *Queries) GetShipmentByAWBForUpdate(ctx context.Context, awb string) (Shipment, error) {
@@ -129,6 +131,7 @@ func (q *Queries) GetShipmentByAWBForUpdate(ctx context.Context, awb string) (Sh
 		&i.LastEventAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DemoRequestID,
 	)
 	return i, err
 }
@@ -206,7 +209,7 @@ func (q *Queries) GetSubOrderForShipping(ctx context.Context, id uuid.UUID) (Get
 }
 
 const listOrderShipments = `-- name: ListOrderShipments :many
-SELECT sh.id, sh.sub_order_id, sh.kind, sh.ref, sh.provider, sh.awb, sh.status, sh.eta, sh.cod_amount_paise, sh.last_event_at, sh.created_at, sh.updated_at FROM shipments sh JOIN sub_orders s ON s.id = sh.sub_order_id
+SELECT sh.id, sh.sub_order_id, sh.kind, sh.ref, sh.provider, sh.awb, sh.status, sh.eta, sh.cod_amount_paise, sh.last_event_at, sh.created_at, sh.updated_at, sh.demo_request_id FROM shipments sh JOIN sub_orders s ON s.id = sh.sub_order_id
 WHERE s.order_id = $1 ORDER BY sh.created_at
 `
 
@@ -232,6 +235,7 @@ func (q *Queries) ListOrderShipments(ctx context.Context, orderID uuid.UUID) ([]
 			&i.LastEventAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DemoRequestID,
 		); err != nil {
 			return nil, err
 		}

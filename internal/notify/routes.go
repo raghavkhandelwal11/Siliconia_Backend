@@ -34,6 +34,7 @@ var templates = map[string]channels{
 	"issue_update":            {email: true},
 	"approval_result":         {sms: true, email: true},
 	"membership_renewed":      {sms: true, email: true},
+	"cashout_paid":            {sms: true, email: true},
 	"membership_predebit":     {sms: true, whatsapp: true, email: true},
 	"membership_lapsed":       {sms: true, email: true},
 	"electrons_available":     {whatsapp: true},
@@ -117,6 +118,17 @@ func route(ctx context.Context, q *store.Queries, topic string, raw []byte) ([]N
 		return issueUpdated(p)
 	case "account.approval_changed":
 		return approvalChanged(p)
+	case "cashout.finished":
+		acc, ok := p.id("accountId")
+		if !ok {
+			return nil, nil
+		}
+		if p.str("status") == "PAID" {
+			return []Notice{{Account: acc, Template: "cashout_paid", Title: "Cash-out paid",
+				Body: "₹" + strconv.FormatInt(p.num("electrons"), 10) + " has been sent to your bank account.", Link: "/creator"}}, nil
+		}
+		return []Notice{{Account: acc, Template: "cashout_paid", Title: "Cash-out failed",
+			Body: "Your bank transfer failed, so your Electrons are back in your balance. Check your bank details.", Link: "/creator"}}, nil
 	case "membership.activated", "membership.predebit", "membership.lapsed", "electrons.lot_available":
 		return m3Notice(topic, p)
 	}
@@ -170,7 +182,7 @@ func subOrderChanged(ctx context.Context, q *store.Queries, p payload) ([]Notice
 	}
 	link := "/account/orders/" + d.OrderID.String()
 	awb := ""
-	if sh, err := q.GetForwardShipment(ctx, subID); err == nil {
+	if sh, err := q.GetForwardShipment(ctx, &subID); err == nil {
 		awb = " (AWB " + sh.Awb + ")"
 	}
 	from := " from " + d.StoreName
@@ -295,6 +307,21 @@ func issueUpdated(p payload) ([]Notice, error) {
 func approvalChanged(p payload) ([]Notice, error) {
 	acc, ok := p.id("accountId")
 	if !ok {
+		return nil, nil
+	}
+	if role := p.str("role"); role == "CREATOR" || role == "PROMOTER" {
+		home, name := "/creator", "creator"
+		if role == "PROMOTER" {
+			home, name = "/promoter", "promoter"
+		}
+		if p.str("approval") == "APPROVED" {
+			return []Notice{{Account: acc, Template: "approval_result", Title: "You're approved as a " + name,
+				Body: "Your Siliconics " + name + " application is approved. Open your dashboard to get started.", Link: home}}, nil
+		}
+		if p.str("approval") == "REJECTED" {
+			return []Notice{{Account: acc, Template: "approval_result", Title: "Application not approved",
+				Body: "Your " + name + " application needs changes. See the reason on your dashboard.", Link: home}}, nil
+		}
 		return nil, nil
 	}
 	switch p.str("approval") {

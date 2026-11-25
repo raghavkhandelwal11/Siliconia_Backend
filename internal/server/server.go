@@ -15,6 +15,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/m3http"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/m4http"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
@@ -53,6 +54,7 @@ type Deps struct {
 	Issues      *issues.Handler
 	Notify      *notify.Handler
 	M3          *m3http.Handler
+	M4          *m4http.Handler
 }
 
 // New returns the root handler.
@@ -102,7 +104,13 @@ func New(d Deps) http.Handler {
 					g.Use(auth.Authenticate(d.AuthService))
 				}
 				d.M3.ViewerRoutes(g)
+				if d.M4 != nil {
+					d.M4.ViewerRoutes(g)
+				}
 			})
+		}
+		if d.M4 != nil {
+			d.M4.PublicRoutes(api)
 		}
 		if d.Auth != nil {
 			api.Group(func(api chi.Router) {
@@ -137,6 +145,9 @@ func New(d Deps) http.Handler {
 				}
 				if d.M3 != nil {
 					d.M3.Routes(api)
+				}
+				if d.M4 != nil {
+					d.M4.Routes(api)
 				}
 
 			})

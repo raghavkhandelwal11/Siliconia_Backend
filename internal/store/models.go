@@ -396,6 +396,19 @@ type CartItem struct {
 	AddedAt         time.Time `json:"addedAt"`
 }
 
+type CashoutRequest struct {
+	ID            uuid.UUID  `json:"id"`
+	CreatorID     uuid.UUID  `json:"creatorId"`
+	Electrons     int32      `json:"electrons"`
+	Status        string     `json:"status"`
+	ProviderRef   *string    `json:"providerRef"`
+	BankRef       *string    `json:"bankRef"`
+	FailureReason *string    `json:"failureReason"`
+	BatchID       *uuid.UUID `json:"batchId"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
 type Category struct {
 	ID            uuid.UUID  `json:"id"`
 	ParentID      *uuid.UUID `json:"parentId"`
@@ -430,6 +443,61 @@ type ConfigHistory struct {
 	ChangedAt time.Time  `json:"changedAt"`
 }
 
+type CreatorProfile struct {
+	AccountID     uuid.UUID  `json:"accountId"`
+	Niche         string     `json:"niche"`
+	Bio           string     `json:"bio"`
+	TermsVersion  *string    `json:"termsVersion"`
+	PanEnc        []byte     `json:"panEnc"`
+	PanLast4      *string    `json:"panLast4"`
+	BankEnc       []byte     `json:"bankEnc"`
+	BankLast4     *string    `json:"bankLast4"`
+	KycVerifiedAt *time.Time `json:"kycVerifiedAt"`
+	SubmittedAt   *time.Time `json:"submittedAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
+type CreatorReview struct {
+	ID          uuid.UUID `json:"id"`
+	CreatorID   uuid.UUID `json:"creatorId"`
+	ProductID   uuid.UUID `json:"productId"`
+	Rating      int32     `json:"rating"`
+	Body        string    `json:"body"`
+	Media       []byte    `json:"media"`
+	Status      string    `json:"status"`
+	Rank        int32     `json:"rank"`
+	PublishedAt time.Time `json:"publishedAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type CreatorSocial struct {
+	AccountID uuid.UUID `json:"accountId"`
+	Platform  string    `json:"platform"`
+	Url       string    `json:"url"`
+	Followers int32     `json:"followers"`
+}
+
+type CreatorVote struct {
+	CreatorReviewID uuid.UUID `json:"creatorReviewId"`
+	BuyerID         uuid.UUID `json:"buyerId"`
+	Value           int32     `json:"value"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type DemoRequest struct {
+	ID            uuid.UUID  `json:"id"`
+	CreatorID     uuid.UUID  `json:"creatorId"`
+	ProductID     uuid.UUID  `json:"productId"`
+	SellerID      uuid.UUID  `json:"sellerId"`
+	Status        string     `json:"status"`
+	Note          string     `json:"note"`
+	DeclineReason *string    `json:"declineReason"`
+	ShipmentID    *uuid.UUID `json:"shipmentId"`
+	DueAt         *time.Time `json:"dueAt"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
 type ElectronLot struct {
 	ID          uuid.UUID  `json:"id"`
 	AccountID   uuid.UUID  `json:"accountId"`
@@ -442,6 +510,11 @@ type ElectronLot struct {
 	ExpiresAt   *time.Time `json:"expiresAt"`
 	IsSynthetic bool       `json:"isSynthetic"`
 	CreatedAt   time.Time  `json:"createdAt"`
+}
+
+type HelpfulVote struct {
+	ReviewID  uuid.UUID `json:"reviewId"`
+	AccountID uuid.UUID `json:"accountId"`
 }
 
 type IdempotencyKey struct {
@@ -700,6 +773,16 @@ type Payment struct {
 	CheckoutUrl       *string       `json:"checkoutUrl"`
 }
 
+type PoolSettlement struct {
+	PoolID         uuid.UUID  `json:"poolId"`
+	CreatorID      uuid.UUID  `json:"creatorId"`
+	VerifiedAgrees int32      `json:"verifiedAgrees"`
+	Weight         int32      `json:"weight"`
+	Score          int32      `json:"score"`
+	Share          int32      `json:"share"`
+	LotID          *uuid.UUID `json:"lotId"`
+}
+
 type ProcessedEvent struct {
 	Consumer    string    `json:"consumer"`
 	EventID     uuid.UUID `json:"eventId"`
@@ -730,11 +813,59 @@ type Product struct {
 	Version       int32          `json:"version"`
 }
 
+type ProductFeedback struct {
+	ID          uuid.UUID  `json:"id"`
+	ProductID   uuid.UUID  `json:"productId"`
+	BuyerID     uuid.UUID  `json:"buyerId"`
+	Category    string     `json:"category"`
+	Body        string     `json:"body"`
+	SellerReply *string    `json:"sellerReply"`
+	RepliedAt   *time.Time `json:"repliedAt"`
+	CreatedAt   time.Time  `json:"createdAt"`
+}
+
 type ProductImage struct {
 	ProductID uuid.UUID `json:"productId"`
 	UploadID  uuid.UUID `json:"uploadId"`
 	Position  int32     `json:"position"`
 	Alt       string    `json:"alt"`
+}
+
+type ProductsOfWeek struct {
+	WeekStart pgtype.Date    `json:"weekStart"`
+	ProductID uuid.UUID      `json:"productId"`
+	Rank      int32          `json:"rank"`
+	Score     pgtype.Numeric `json:"score"`
+}
+
+type PromoterInvestment struct {
+	ID                uuid.UUID  `json:"id"`
+	PromoterID        uuid.UUID  `json:"promoterId"`
+	SellerID          uuid.UUID  `json:"sellerId"`
+	ProofNote         string     `json:"proofNote"`
+	SellerConfirmedAt *time.Time `json:"sellerConfirmedAt"`
+	DeclinedAt        *time.Time `json:"declinedAt"`
+	CreatedAt         time.Time  `json:"createdAt"`
+}
+
+type PromoterProfile struct {
+	AccountID   uuid.UUID `json:"accountId"`
+	Type        string    `json:"type"`
+	DisplayName string    `json:"displayName"`
+	Company     []byte    `json:"company"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type PromoterRewardRule struct {
+	ProductID uuid.UUID `json:"productId"`
+	Type      string    `json:"type"`
+	Value     int32     `json:"value"`
+}
+
+type Promotion struct {
+	PromoterID uuid.UUID `json:"promoterId"`
+	ProductID  uuid.UUID `json:"productId"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 type Refund struct {
@@ -769,6 +900,43 @@ type ReturnRequest struct {
 	OutcomeNote           string     `json:"outcomeNote"`
 	CreatedAt             time.Time  `json:"createdAt"`
 	UpdatedAt             time.Time  `json:"updatedAt"`
+}
+
+type Review struct {
+	ID           uuid.UUID `json:"id"`
+	OrderItemID  uuid.UUID `json:"orderItemId"`
+	ProductID    uuid.UUID `json:"productId"`
+	AccountID    uuid.UUID `json:"accountId"`
+	Rating       int32     `json:"rating"`
+	Title        string    `json:"title"`
+	Body         string    `json:"body"`
+	Status       string    `json:"status"`
+	HelpfulCount int32     `json:"helpfulCount"`
+	ReportCount  int32     `json:"reportCount"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+type ReviewPhoto struct {
+	ReviewID uuid.UUID `json:"reviewId"`
+	UploadID uuid.UUID `json:"uploadId"`
+	Position int32     `json:"position"`
+}
+
+type ReviewReport struct {
+	ReviewID  uuid.UUID `json:"reviewId"`
+	AccountID uuid.UUID `json:"accountId"`
+	Reason    string    `json:"reason"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type RewardPool struct {
+	ID        uuid.UUID  `json:"id"`
+	ProductID uuid.UUID  `json:"productId"`
+	Period    string     `json:"period"`
+	Size      int32      `json:"size"`
+	FundedBy  string     `json:"fundedBy"`
+	SettledAt *time.Time `json:"settledAt"`
 }
 
 type SellerProfile struct {
@@ -817,7 +985,7 @@ type Session struct {
 
 type Shipment struct {
 	ID             uuid.UUID  `json:"id"`
-	SubOrderID     uuid.UUID  `json:"subOrderId"`
+	SubOrderID     *uuid.UUID `json:"subOrderId"`
 	Kind           string     `json:"kind"`
 	Ref            string     `json:"ref"`
 	Provider       string     `json:"provider"`
@@ -828,6 +996,7 @@ type Shipment struct {
 	LastEventAt    *time.Time `json:"lastEventAt"`
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
+	DemoRequestID  *uuid.UUID `json:"demoRequestId"`
 }
 
 type SpendAllocation struct {
