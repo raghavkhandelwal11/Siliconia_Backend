@@ -263,7 +263,7 @@ func (s *Service) Decide(ctx context.Context, seller, id uuid.UUID, approve bool
 		if !booked.ETA.IsZero() {
 			eta = &booked.ETA
 		}
-		sh, err := q.CreateShipment(ctx, store.CreateShipmentParams{ID: shipID, SubOrderID: r.SubOrderID, Kind: provider.Return, Ref: r.ID.String(),
+		sh, err := q.CreateShipment(ctx, store.CreateShipmentParams{ID: shipID, SubOrderID: &r.SubOrderID, Kind: provider.Return, Ref: r.ID.String(),
 			Provider: s.Courier.Name(), Awb: booked.AWB, Status: booked.Status, Eta: eta})
 		if err != nil {
 			return err

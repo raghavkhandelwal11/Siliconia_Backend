@@ -211,7 +211,7 @@ func Split(total int64, weights []int64) []int64 {
 
 // ReverseItem cancels Electrons still pending for an item that was cancelled
 // or returned (informational REVERSAL entry; they were never available).
-func ReverseItem(ctx context.Context, q *store.Queries, account, itemID uuid.UUID) error {
+func ReverseItem(ctx context.Context, q *store.Queries, _ uuid.UUID, itemID uuid.UUID) error {
 	lots, err := q.LotsForItem(ctx, itemID)
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func ReverseItem(ctx context.Context, q *store.Queries, account, itemID uuid.UUI
 			return err
 		}
 		lot := l.ID
-		if _, err := q.AddLedger(ctx, store.AddLedgerParams{ID: newID(), AccountID: account, Type: "REVERSAL", Amount: -l.Amount, LotID: &lot,
+		if _, err := q.AddLedger(ctx, store.AddLedgerParams{ID: newID(), AccountID: l.AccountID, Type: "REVERSAL", Amount: -l.Amount, LotID: &lot,
 			RefType: RefOrderItem, RefID: itemID}); err != nil {
 			return err
 		}
@@ -246,6 +246,20 @@ func expiryMonths(ctx context.Context, q *store.Queries) int {
 		}
 	}
 	return 12
+}
+
+// Grant creates a pending lot for creator pools and promoter rewards,
+// available from availableAt (LLD 8.7, 8.9).
+func Grant(ctx context.Context, q *store.Queries, account uuid.UUID, source, ledgerType, refType string, ref uuid.UUID, amount int32,
+	availableAt *time.Time, note string) (uuid.UUID, error) {
+	lot, err := q.CreateLot(ctx, store.CreateLotParams{ID: newID(), AccountID: account, Source: source, SourceRef: ref, Amount: amount,
+		Remaining: amount, Status: store.LotStatusPENDING, AvailableAt: availableAt})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	_, err = q.AddLedger(ctx, store.AddLedgerParams{ID: newID(), AccountID: account, Type: ledgerType, Amount: amount, LotID: &lot.ID,
+		RefType: refType, RefID: ref, Note: note})
+	return lot.ID, err
 }
 
 // Mature makes pending Electrons available once the return window has

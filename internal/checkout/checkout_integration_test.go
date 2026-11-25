@@ -35,6 +35,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/launch"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/m3http"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/m4http"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/membership"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
@@ -45,13 +46,18 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/migrate"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/storage"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/programmes"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/kyc"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	provider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payment"
+	payoutprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payout"
 	shipprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/shipping"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/returns"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/reviews"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/shipping"
 	simpay "github.com/raghavkhandelwal11/Siliconia_Backend/internal/sim/pay"
+	simpayout "github.com/raghavkhandelwal11/Siliconia_Backend/internal/sim/payout"
 	simship "github.com/raghavkhandelwal11/Siliconia_Backend/internal/sim/ship"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
@@ -90,6 +96,9 @@ type env struct {
 	mem    *membership.Service
 	led    *electrons.Service
 	rdb    *redis.Client
+	prog   *programmes.Service
+	rev    *reviews.Service
+	paysim *simpayout.Sim
 }
 
 func setup(t *testing.T) *env {
@@ -107,7 +116,7 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments, issues, notifications, notification_prefs, launches, memberships, membership_purchases, electron_lots, ledger_entries CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments, issues, notifications, notification_prefs, launches, reviews, creator_profiles, demo_requests, creator_reviews, reward_pools, cashout_requests, promoter_profiles, promoter_investments, promotions, promoter_reward_rules, products_of_week, product_feedback, memberships, membership_purchases, electron_lots, ledger_entries CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := catalogue.Seed(ctx, pool); err != nil {
@@ -130,6 +139,12 @@ func setup(t *testing.T) *env {
 	mem := &membership.Service{Pool: pool, Q: q, Payments: pays, PublicURL: "http://shop.test", Log: log}
 	led := &electrons.Service{Pool: pool, Q: q}
 	co.Launches = lau
+	box2, _ := crypto.NewBox(config.DevKey("encryption-master"))
+	prods := &product.Service{Pool: pool, Q: q, Store: storage.NewMemory(), Log: log}
+	rev := &reviews.Service{Pool: pool, Q: q}
+	prog := &programmes.Service{Pool: pool, Q: q, Box: box2, KYC: okKYC{}, Log: log}
+	ships.Demos = prog.OnDemoTracking
+	ships.OnDelivered = programmes.RewardPromoters
 	pays.Hooks = map[string]payment.Hook{"ORDER": co.OnPayment, "MEMBERSHIP": mem.OnPayment, "RENEWAL": mem.OnPayment}
 	ord := &orders.Service{Pool: pool, Q: q, Payments: pays, Log: log}
 	ret := &returns.Service{Pool: pool, Q: q, Payments: pays, Log: log}
@@ -145,6 +160,7 @@ func setup(t *testing.T) *env {
 		Cart:    &cart.Handler{Svc: &cart.Service{Pool: pool, Q: q}},
 		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships}, Orders: &orders.Handler{Svc: ord}, Returns: &returns.Handler{Svc: ret}, Issues: &issues.Handler{Svc: iss}, Notify: &notify.Handler{Svc: note, Redis: rdb, StreamFor: 3 * time.Second},
 		M3: &m3http.Handler{Electrons: led, Membership: mem, Launches: lau, Redis: rdb},
+		M4: &m4http.Handler{Reviews: rev, Programmes: prog, Products: prods},
 	}))
 	t.Cleanup(srv.Close)
 	sim := simpay.New(simpay.Config{PublicURL: "http://shop.test", APIKey: "k", WebhookURL: srv.URL + "/api/v1/webhooks/payment",
@@ -158,7 +174,13 @@ func setup(t *testing.T) *env {
 	t.Cleanup(shipSrv.Close)
 	ships.Provider = shipprovider.NewSim(shipSrv.URL, "sk", shipSecret)
 	ret.Courier = ships.Provider
-	return &env{t: t, ctx: ctx, pool: pool, srv: srv, prods: &product.Service{Pool: pool, Q: q, Store: storage.NewMemory(), Log: log}, inbox: in, mr: mr,
+	prog.Courier = ships.Provider
+	paySecret := []byte("payout-secret")
+	paySim := simpayout.New(simpayout.Config{APIKey: "pk", WebhookURL: srv.URL + "/api/v1/webhooks/payout", WebhookSecret: paySecret, Delay: 5 * time.Millisecond, Log: log})
+	paySrv := httptest.NewServer(paySim.Handler())
+	t.Cleanup(paySrv.Close)
+	prog.Payout = payoutprovider.NewSim(paySrv.URL, "pk", paySecret)
+	return &env{t: t, ctx: ctx, pool: pool, srv: srv, prods: prods, inbox: in, mr: mr, prog: prog, rev: rev, paysim: paySim,
 		co: co, sim: sim, simURL: simSrv.URL, ship: ships, ships: shipSim, ord: ord, ret: ret, iss: iss, note: note, sent: sent, lau: lau, mem: mem, led: led, rdb: rdb}
 }
 
@@ -1178,4 +1200,14 @@ func (e *env) makeMember(phone string) {
 		ON CONFLICT (account_id) DO NOTHING`, phone); err != nil {
 		e.t.Fatal(err)
 	}
+}
+
+// okKYC verifies every PAN and bank account (sim-kyc's happy path).
+type okKYC struct{}
+
+func (okKYC) VerifyPAN(context.Context, string, string) (kyc.Result, error) {
+	return kyc.Result{Status: kyc.Verified, NameMatch: 1}, nil
+}
+func (okKYC) PennyDrop(context.Context, string, string, string) (kyc.Result, error) {
+	return kyc.Result{Status: kyc.Verified, NameMatch: 1}, nil
 }

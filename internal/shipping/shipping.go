@@ -38,6 +38,10 @@ type Service struct {
 	Q        *store.Queries
 	Provider provider.Provider
 	Log      *slog.Logger
+	// OnDelivered runs for delivered items (promoter rewards).
+	OnDelivered func(ctx context.Context, q *store.Queries, items []uuid.UUID, windowEnd time.Time) error
+	// Demos applies scans on demo units sent to creators (programmes module).
+	Demos func(ctx context.Context, tx pgx.Tx, q *store.Queries, sh store.Shipment, status string) error
 	// Returns applies scans on return pickups (the returns module).
 	Returns func(ctx context.Context, tx pgx.Tx, q *store.Queries, sh store.Shipment, status string) (after func(context.Context), err error)
 
@@ -115,7 +119,7 @@ func (s *Service) Ship(ctx context.Context, seller, subOrderID uuid.UUID, weight
 		if err != nil {
 			return err
 		}
-		if existing, err := q.GetForwardShipment(ctx, subOrderID); err == nil {
+		if existing, err := q.GetForwardShipment(ctx, &subOrderID); err == nil {
 			out = view(existing)
 			return nil
 		} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -164,7 +168,7 @@ func (s *Service) Ship(ctx context.Context, seller, subOrderID uuid.UUID, weight
 		if !booked.ETA.IsZero() {
 			eta = &booked.ETA
 		}
-		sh, err := q.CreateShipment(ctx, store.CreateShipmentParams{ID: id, SubOrderID: subOrderID, Kind: provider.Forward, Ref: req.Ref,
+		sh, err := q.CreateShipment(ctx, store.CreateShipmentParams{ID: id, SubOrderID: &subOrderID, Kind: provider.Forward, Ref: req.Ref,
 			Provider: s.Provider.Name(), Awb: booked.AWB, Status: booked.Status, Eta: eta, CodAmountPaise: cod})
 		if err != nil {
 			return err
@@ -196,7 +200,7 @@ func (s *Service) Label(ctx context.Context, seller, subOrderID uuid.UUID) ([]by
 	if err != nil {
 		return nil, "", err
 	}
-	sh, err := s.Q.GetForwardShipment(ctx, subOrderID)
+	sh, err := s.Q.GetForwardShipment(ctx, &subOrderID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, "", httpx.ErrNotFound
 	}
@@ -288,14 +292,20 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 		}
 		return err
 	}
-	if sh.Kind != provider.Forward {
+	if sh.DemoRequestID != nil {
+		if s.Demos != nil {
+			return s.Demos(ctx, tx, q, sh, e.Status)
+		}
+		return nil
+	}
+	if sh.Kind != provider.Forward || sh.SubOrderID == nil {
 		return nil
 	}
 	next, ok := subStatus(e.Status)
 	if !ok {
 		return nil
 	}
-	so, err := q.GetSubOrder(ctx, sh.SubOrderID)
+	so, err := q.GetSubOrder(ctx, *sh.SubOrderID)
 	if err != nil {
 		return err
 	}
@@ -323,6 +333,11 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 		}
 		if err := q.SetLotAvailableAt(ctx, store.SetLotAvailableAtParams{AvailableAt: windowEnd, Items: ids}); err != nil {
 			return err
+		}
+		if s.OnDelivered != nil {
+			if err := s.OnDelivered(ctx, q, ids, windowEnd); err != nil {
+				return err
+			}
 		}
 	} else if _, err := q.SetSubOrderStatus(ctx, store.SetSubOrderStatusParams{ID: so.ID, Status: next}); err != nil {
 		return err

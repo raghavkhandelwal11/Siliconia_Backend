@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 1.5.0
+  version: 1.6.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -2063,6 +2063,886 @@ paths:
       responses:
         "204": { description: Cancelled }
         "409": { $ref: "#/components/responses/Error" }
+  /products/{id}/reviews:
+    get:
+      operationId: listReviews
+      summary: "Published buyer reviews (10 per page) and the star summary"
+      tags: [reviews]
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: sort, in: query, schema: { type: string, enum: [recent, helpful] } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReviewPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /products/{id}/creator-reviews:
+    get:
+      operationId: listCreatorReviews
+      summary: "Creator reviews in publication order with agree and disagree counts"
+      tags: [reviews]
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatorReviewList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /products/{id}/promoters:
+    get:
+      operationId: productPromoters
+      summary: "Promoters of the product"
+      tags: [programmes]
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /products/{id}/bought-together:
+    get:
+      operationId: boughtTogether
+      summary: "Products often bought with this one"
+      tags: [discovery]
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /home/products-of-week:
+    get:
+      operationId: productsOfWeek
+      summary: "This week's top products"
+      tags: [discovery]
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /home/for-you:
+    get:
+      operationId: forYou
+      summary: "Recommendations from the buyer's categories"
+      tags: [discovery]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /uploads/review-images:
+    post:
+      operationId: uploadReviewImage
+      summary: "Upload a review photo (raw image body, up to 10 MB)"
+      tags: [reviews]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Upload" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /order-items/{id}/review:
+    post:
+      operationId: createReview
+      summary: "Review a delivered item (one per item)"
+      tags: [reviews]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                title: { type: string }
+                body: { type: string }
+                photoIds: { type: array, maxItems: 5, items: { type: string, format: uuid } }
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Created" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /me/reviewed-items:
+    get:
+      operationId: reviewedItems
+      summary: "Order items the buyer has reviewed"
+      tags: [reviews]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /reviews/{id}/helpful:
+    post:
+      operationId: markHelpful
+      summary: "Mark a review helpful (once per account)"
+      tags: [reviews]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /reviews/{id}/report:
+    post:
+      operationId: reportReview
+      summary: "Report a review; three reports hide it"
+      tags: [reviews]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /products/{id}/feedback:
+    post:
+      operationId: sendFeedback
+      summary: "Feedback to the manufacturer (needs a delivered purchase)"
+      tags: [reviews]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category, body]
+              properties:
+                category: { type: string, enum: [QUALITY, FEATURE, PACKAGING, DOCUMENTATION, OTHER] }
+                body: { type: string }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator-reviews/{id}/vote:
+    post:
+      operationId: voteCreatorReview
+      summary: "Agree (1), disagree (-1) or clear (0)"
+      tags: [reviews]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: integer, enum: [-1, 0, 1] }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/application:
+    get:
+      operationId: getCreatorApplication
+      summary: "The creator application"
+      tags: [programmes]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatorApplication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: saveCreatorApplication
+      summary: "Save niche, bio and channels"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [niche, socials]
+              properties:
+                niche: { type: string }
+                bio: { type: string }
+                socials: { type: array, items: { $ref: "#/components/schemas/Social" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatorApplication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/application/submit:
+    post:
+      operationId: submitCreatorApplication
+      summary: "Submit for review (follower criterion checked)"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acceptTerms]
+              properties:
+                acceptTerms: { type: boolean }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatorApplication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/kyc:
+    post:
+      operationId: creatorKyc
+      summary: "Verify PAN and bank (sim-kyc); stored encrypted"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pan, account, ifsc]
+              properties:
+                pan: { type: string }
+                account: { type: string }
+                ifsc: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatorApplication" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/demo-requests:
+    get:
+      operationId: creatorDemos
+      summary: "The creator's demo requests"
+      tags: [programmes]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: requestDemo
+      summary: "Ask the seller for a demo unit"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId]
+              properties:
+                productId: { type: string, format: uuid }
+                note: { type: string }
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Created" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/reviews:
+    get:
+      operationId: myCreatorReviews
+      summary: "The creator's reviews"
+      tags: [programmes]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: postCreatorReview
+      summary: "Publish a review after the demo is delivered"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, rating, body]
+              properties:
+                productId: { type: string, format: uuid }
+                rating: { type: integer }
+                body: { type: string }
+                videos: { type: array, items: { type: string } }
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Created" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/reviews/{id}:
+    patch:
+      operationId: editCreatorReview
+      summary: "Edit the creator's review"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating, body]
+              properties:
+                rating: { type: integer }
+                body: { type: string }
+                videos: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Created" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/earnings:
+    get:
+      operationId: creatorEarnings
+      summary: "Reward pool shares by month"
+      tags: [programmes]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/cashouts:
+    get:
+      operationId: listCashouts
+      summary: "Cash-out requests"
+      tags: [programmes]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: requestCashout
+      summary: "Cash out at least 250 Electrons (1 = ₹1) in the weekly batch"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [electrons]
+              properties:
+                electrons: { type: integer, minimum: 250 }
+      responses:
+        "201":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Created" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /creator/cashouts/{id}:
+    delete:
+      operationId: cancelCashout
+      summary: "Cancel before the batch runs"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /promoter/application:
+    put:
+      operationId: savePromoter
+      summary: "Save the promoter profile and submit it"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, displayName]
+              properties:
+                type: { type: string, enum: [INDIVIDUAL, COMPANY] }
+                displayName: { type: string }
+                company: { type: object }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /promoter/dashboard:
+    get:
+      operationId: promoterDashboard
+      summary: "Approval, investments and promotable products"
+      tags: [programmes]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Object" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /promoter/investments:
+    post:
+      operationId: addInvestment
+      summary: "Record an investment in a seller (the seller confirms)"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sellerId, proof]
+              properties:
+                sellerId: { type: string, format: uuid }
+                proof: { type: string }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /promoter/products/{id}/promotion:
+    put:
+      operationId: promote
+      summary: "Promote a product of a confirmed startup"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: unpromote
+      summary: "Stop promoting"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/demo-requests:
+    get:
+      operationId: sellerDemos
+      summary: "Demo requests for the seller's products"
+      tags: [programmes]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/demo-requests/{id}/decision:
+    post:
+      operationId: decideDemo
+      summary: "Approve (ships via sim-ship) or decline"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approve]
+              properties:
+                approve: { type: boolean }
+                reason: { type: string }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/promoters:
+    get:
+      operationId: sellerPromoters
+      summary: "Promoter investment claims"
+      tags: [programmes]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/promoters/{id}/confirm:
+    post:
+      operationId: confirmPromoter
+      summary: "Confirm or decline an investment claim"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: boolean }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/products/{id}/promoter-reward:
+    put:
+      operationId: setPromoterReward
+      summary: "Electrons per unit sold for the product's promoters (interim until Q-03)"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [electronsPerUnit]
+              properties:
+                electronsPerUnit: { type: integer }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/feedback:
+    get:
+      operationId: sellerFeedback
+      summary: "Buyer feedback on the seller's products"
+      tags: [reviews]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/feedback/{id}/reply:
+    post:
+      operationId: replyFeedback
+      summary: "Reply to feedback"
+      tags: [reviews]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reply]
+              properties:
+                reply: { type: string }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/approvals/{role}:
+    get:
+      operationId: programmeQueue
+      summary: "Creator or promoter applications to review"
+      tags: [programmes]
+      parameters:
+        - { name: role, in: path, required: true, schema: { type: string, enum: [creators, promoters] } }
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/approvals/{role}/{id}/decision:
+    post:
+      operationId: decideProgramme
+      summary: "Approve or reject a creator or promoter"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: role, in: path, required: true, schema: { type: string, enum: [creators, promoters] } }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approve]
+              properties:
+                approve: { type: boolean }
+                reason: { type: string }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/reviews/reported:
+    get:
+      operationId: reportedReviews
+      summary: "Reviews with reports"
+      tags: [reviews]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/reviews/{id}/moderate:
+    post:
+      operationId: moderateReview
+      summary: "Publish or hide a review"
+      tags: [reviews]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [publish]
+              properties:
+                publish: { type: boolean }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/reward-pools:
+    get:
+      operationId: listPools
+      summary: "Reward pools"
+      tags: [programmes]
+      responses:
+        "200":
+          description: Items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: setPool
+      summary: "Set a product's monthly pool in Electrons (Q-02)"
+      tags: [programmes]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, period, size]
+              properties:
+                productId: { type: string, format: uuid }
+                period: { type: string }
+                size: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Object" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /webhooks/payout:
+    post:
+      operationId: payoutWebhook
+      summary: "Transfer results from sim-payout (X-Sim-Signature)"
+      tags: [payments]
+      security: []
+      responses:
+        "200": { description: Applied }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /webhooks/payment:
     post:
       operationId: paymentWebhook
@@ -3068,6 +3948,103 @@ components:
         profitPaise: { type: integer, format: int64 }
         dealDiscountBps: { type: integer }
         minProfitBps: { type: integer }
+    ItemList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { type: object, additionalProperties: true } }
+    Object:
+      type: object
+      additionalProperties: true
+    Created:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string, format: uuid }
+    Card:
+      type: object
+      required: [id, slug, name, brand, pricePaise, ratingAvg, ratingCount]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        brand: { type: string }
+        pricePaise: { type: integer, format: int64 }
+        ratingAvg: { type: number }
+        ratingCount: { type: integer }
+        coverUrl: { type: string }
+    CardList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Card" } }
+    ReviewPage:
+      type: object
+      required: [items, summary]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, rating, author, helpful, photos, verifiedPurchase, at]
+            properties:
+              id: { type: string, format: uuid }
+              rating: { type: integer }
+              title: { type: string }
+              body: { type: string }
+              author: { type: string }
+              helpful: { type: integer }
+              photos: { type: array, items: { type: string } }
+              verifiedPurchase: { type: boolean }
+              at: { type: string, format: date-time }
+        summary:
+          type: object
+          required: [count, average, stars]
+          properties:
+            count: { type: integer }
+            average: { type: number }
+            stars: { type: array, items: { type: integer } }
+    CreatorReviewList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, creatorName, rating, body, videos, rank, agrees, disagrees, myVote, at]
+            properties:
+              id: { type: string, format: uuid }
+              creatorName: { type: string }
+              rating: { type: integer }
+              body: { type: string }
+              videos: { type: array, items: { type: string } }
+              rank: { type: integer }
+              agrees: { type: integer }
+              disagrees: { type: integer }
+              myVote: { type: integer }
+              at: { type: string, format: date-time }
+    Social:
+      type: object
+      required: [platform, url, followers]
+      properties:
+        platform: { type: string, enum: [YOUTUBE, INSTAGRAM, X, OTHER] }
+        url: { type: string }
+        followers: { type: integer }
+    CreatorApplication:
+      type: object
+      required: [niche, bio, socials, approval, minFollowers, kycVerified]
+      properties:
+        niche: { type: string }
+        bio: { type: string }
+        socials: { type: array, items: { $ref: "#/components/schemas/Social" } }
+        approval: { type: string }
+        reason: { type: string }
+        minFollowers: { type: integer }
+        kycVerified: { type: boolean }
+        panLast4: { type: string }
+        bankLast4: { type: string }
+        submittedAt: { type: string, format: date-time }
   responses:
     Error:
       description: Problem details (see code)

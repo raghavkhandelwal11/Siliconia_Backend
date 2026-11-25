@@ -186,9 +186,10 @@ func (q *Queries) DueToExpire(ctx context.Context) ([]ElectronLot, error) {
 
 const dueToMature = `-- name: DueToMature :many
 SELECT l.id, l.account_id, l.source, l.source_ref, l.amount, l.remaining, l.status, l.available_at, l.expires_at, l.is_synthetic, l.created_at FROM electron_lots l
-JOIN order_items i ON i.id = l.source_ref
-WHERE l.status = 'PENDING' AND l.source = 'PURCHASE' AND l.available_at <= now() AND i.status IN ('ACTIVE', 'REPLACED')
-  AND NOT EXISTS (SELECT 1 FROM return_requests r WHERE r.order_item_id = i.id AND r.status NOT IN ('REJECTED', 'REPLACEMENT_SHIPPED'))
+LEFT JOIN order_items i ON i.id = l.source_ref AND l.source IN ('PURCHASE', 'PROMOTER')
+WHERE l.status = 'PENDING' AND l.available_at <= now()
+  AND (l.source NOT IN ('PURCHASE', 'PROMOTER') OR (i.status IN ('ACTIVE', 'REPLACED')
+    AND NOT EXISTS (SELECT 1 FROM return_requests r WHERE r.order_item_id = i.id AND r.status NOT IN ('REJECTED', 'REPLACEMENT_SHIPPED'))))
 ORDER BY l.available_at LIMIT 500
 FOR UPDATE OF l SKIP LOCKED
 `
@@ -316,7 +317,7 @@ func (q *Queries) LockSpendableLots(ctx context.Context, accountID uuid.UUID) ([
 }
 
 const lotsForItem = `-- name: LotsForItem :many
-SELECT id, account_id, source, source_ref, amount, remaining, status, available_at, expires_at, is_synthetic, created_at FROM electron_lots WHERE source = 'PURCHASE' AND source_ref = $1 FOR UPDATE
+SELECT id, account_id, source, source_ref, amount, remaining, status, available_at, expires_at, is_synthetic, created_at FROM electron_lots WHERE source IN ('PURCHASE', 'PROMOTER') AND source_ref = $1 FOR UPDATE
 `
 
 func (q *Queries) LotsForItem(ctx context.Context, sourceRef uuid.UUID) ([]ElectronLot, error) {
@@ -510,7 +511,7 @@ func (q *Queries) SetItemLaunch(ctx context.Context, arg SetItemLaunchParams) er
 }
 
 const setLotAvailableAt = `-- name: SetLotAvailableAt :exec
-UPDATE electron_lots SET available_at = $1::timestamptz WHERE source = 'PURCHASE' AND source_ref = ANY($2::uuid[]) AND status = 'PENDING'
+UPDATE electron_lots SET available_at = $1::timestamptz WHERE source IN ('PURCHASE', 'PROMOTER') AND source_ref = ANY($2::uuid[]) AND status = 'PENDING'
 `
 
 type SetLotAvailableAtParams struct {
@@ -547,7 +548,7 @@ func (q *Queries) SetOrderExtras(ctx context.Context, arg SetOrderExtrasParams) 
 const spendAllocations = `-- name: SpendAllocations :many
 SELECT a.lot_id, a.amount FROM spend_allocations a
 JOIN ledger_entries e ON e.id = a.ledger_entry_id
-WHERE e.ref_type = $1 AND e.ref_id = $2 AND e.type IN ('SPEND_ORDER', 'SPEND_MEMBERSHIP')
+WHERE e.ref_type = $1 AND e.ref_id = $2 AND e.type IN ('SPEND_ORDER', 'SPEND_MEMBERSHIP', 'CASHOUT_HOLD')
 ORDER BY a.lot_id
 `
 

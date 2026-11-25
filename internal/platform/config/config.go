@@ -54,6 +54,9 @@ type Config struct {
 	SimShipURL           string
 	SimShipAPIKey        string
 	SimShipWebhookSecret string
+	SimPayoutURL         string
+	SimPayoutAPIKey      string
+	SimPayoutSecret      string
 
 	// S3-compatible object storage: SeaweedFS (local, VM) or Cloudflare R2.
 	StorageEndpoint    string
@@ -106,6 +109,9 @@ func Load() (Config, error) {
 		SimShipURL:              env("SIM_SHIP_URL", "http://localhost:9002"),
 		SimShipAPIKey:           os.Getenv("SIM_SHIP_API_KEY"),
 		SimShipWebhookSecret:    os.Getenv("SIM_SHIP_WEBHOOK_SECRET"),
+		SimPayoutURL:            env("SIM_PAYOUT_URL", "http://localhost:9003"),
+		SimPayoutAPIKey:         os.Getenv("SIM_PAYOUT_API_KEY"),
+		SimPayoutSecret:         os.Getenv("SIM_PAYOUT_WEBHOOK_SECRET"),
 		StorageEndpoint:         env("STORAGE_ENDPOINT", "localhost:8333"),
 		StorageAccessKey:        os.Getenv("STORAGE_ACCESS_KEY"),
 		StorageSecretKey:        os.Getenv("STORAGE_SECRET_KEY"),
@@ -135,6 +141,8 @@ func Load() (Config, error) {
 		c.SimPayWebhookSecret = orDefault(c.SimPayWebhookSecret, DevKey("sim-pay-webhook")[:32])
 		c.SimShipAPIKey = orDefault(c.SimShipAPIKey, DevKey("sim-ship-api")[:32])
 		c.SimShipWebhookSecret = orDefault(c.SimShipWebhookSecret, DevKey("sim-ship-webhook")[:32])
+		c.SimPayoutAPIKey = orDefault(c.SimPayoutAPIKey, DevKey("sim-payout-api")[:32])
+		c.SimPayoutSecret = orDefault(c.SimPayoutSecret, DevKey("sim-payout-webhook")[:32])
 	}
 	return c, c.validate()
 }

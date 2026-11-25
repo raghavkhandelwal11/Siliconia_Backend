@@ -947,7 +947,7 @@ func (s *Service) Order(ctx context.Context, buyer, id uuid.UUID) (OrderView, er
 			}
 		}
 		for _, sh := range shipments {
-			if sh.SubOrderID != sub.ID || sh.Kind != "FORWARD" || sh.Status == "CANCELLED" {
+			if sh.SubOrderID == nil || *sh.SubOrderID != sub.ID || sh.Kind != "FORWARD" || sh.Status == "CANCELLED" {
 				continue
 			}
 			view := &ShipmentView{AWB: sh.Awb, Courier: sh.Provider, Status: sh.Status, ETA: sh.Eta, Events: []TrackingEvent{}}

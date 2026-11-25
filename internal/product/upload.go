@@ -31,8 +31,18 @@ func (s *Service) UploadImage(ctx context.Context, sellerID uuid.UUID, data []by
 	if err := s.requireSeller(ctx, s.Q, sellerID); err != nil {
 		return UploadView{}, err
 	}
+	return s.storeImage(ctx, sellerID, "PRODUCT_IMAGE", "products", data, 60)
+}
+
+// UploadReviewImage stores a buyer's review photo (20 an hour).
+func (s *Service) UploadReviewImage(ctx context.Context, buyer uuid.UUID, data []byte) (UploadView, error) {
+	return s.storeImage(ctx, buyer, "REVIEW_IMAGE", "reviews", data, 20)
+}
+
+func (s *Service) storeImage(ctx context.Context, owner uuid.UUID, purpose, prefix string, data []byte, perHour int) (UploadView, error) {
+	sellerID := owner
 	if s.Limiter != nil {
-		if r, err := s.Limiter.Allow(ctx, "image-upload", sellerID.String(), 60, time.Hour); err == nil && !r.Allowed {
+		if r, err := s.Limiter.Allow(ctx, "image-upload", sellerID.String(), perHour, time.Hour); err == nil && !r.Allowed {
 			return UploadView{}, httpx.ErrRateLimited.WithDetail("Too many uploads. Try again later")
 		}
 	}
@@ -45,13 +55,13 @@ func (s *Service) UploadImage(ctx context.Context, sellerID uuid.UUID, data []by
 	}
 	id, _ := uuid.NewV7()
 	now := time.Now().UTC()
-	key := fmt.Sprintf("products/%04d/%02d/%s.jpg", now.Year(), now.Month(), id)
+	key := fmt.Sprintf("%s/%04d/%02d/%s.jpg", prefix, now.Year(), now.Month(), id)
 	if err := s.Store.Put(ctx, key, "image/jpeg", img.Data); err != nil {
 		s.Log.Error("image store", "err", err)
 		return UploadView{}, httpx.ErrUnavailable.WithDetail("Image storage is not responding. Try again in a minute")
 	}
 	up, err := s.Q.InsertUpload(ctx, store.InsertUploadParams{
-		ID: id, OwnerID: sellerID, Purpose: "PRODUCT_IMAGE", StorageKey: key, ContentType: "image/jpeg",
+		ID: id, OwnerID: sellerID, Purpose: purpose, StorageKey: key, ContentType: "image/jpeg",
 		Bytes: int32(len(img.Data)), Width: int32(img.Width), Height: int32(img.Height),
 	})
 	if err != nil {
@@ -64,7 +74,7 @@ func (s *Service) UploadImage(ctx context.Context, sellerID uuid.UUID, data []by
 // ServeMedia streams a public product image. Keys are immutable, so browsers
 // and the CDN may cache them for a year.
 func (s *Service) ServeMedia(w http.ResponseWriter, r *http.Request, key string) {
-	if !strings.HasPrefix(key, "products/") || strings.Contains(key, "..") {
+	if !(strings.HasPrefix(key, "products/") || strings.HasPrefix(key, "reviews/")) || strings.Contains(key, "..") {
 		httpx.WriteError(w, r, httpx.ErrNotFound)
 		return
 	}

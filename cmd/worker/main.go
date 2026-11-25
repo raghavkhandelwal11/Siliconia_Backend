@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
@@ -20,13 +21,17 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/crypto"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/jobs"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/logx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/outbox"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/redisx"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/programmes"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	paymentprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payment"
+	payoutprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payout"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/reviews"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
 
@@ -141,6 +146,26 @@ func main() {
 		log.Info("membership renewals", "charged", c, "lapsed", l)
 		return err
 	})
+	box, err := crypto.NewBox(cfg.EncryptionMasterKey)
+	if err != nil {
+		log.Error("crypto", "err", err)
+		os.Exit(1)
+	}
+	prog := &programmes.Service{Pool: pool, Q: q, Box: box, Log: log,
+		Payout: payoutprovider.NewSim(cfg.SimPayoutURL, cfg.SimPayoutAPIKey, []byte(cfg.SimPayoutSecret))}
+	disc := &reviews.Service{Pool: pool, Q: q}
+	mux.HandleFunc(jobs.TypeProductsOfWeek, func(ctx context.Context, _ *asynq.Task) error { return disc.ComputeWeek(ctx, time.Now()) })
+	mux.HandleFunc(jobs.TypeSettlePools, func(ctx context.Context, _ *asynq.Task) error {
+		prev := time.Now().In(time.FixedZone("IST", 19800)).AddDate(0, -1, 0).Format("2006-01")
+		n, err := prog.Settle(ctx, prev)
+		log.Info("reward pools settled", "period", prev, "creators", n)
+		return err
+	})
+	mux.HandleFunc(jobs.TypeCashoutBatch, func(ctx context.Context, _ *asynq.Task) error {
+		_, err := prog.Batch(ctx)
+		return err
+	})
+	mux.HandleFunc(jobs.TypeDemoOverdue, func(ctx context.Context, _ *asynq.Task) error { return q.OverdueDemos(ctx) })
 	mux.HandleFunc(jobs.TypeLaunchTick, func(ctx context.Context, _ *asynq.Task) error { return launches.Tick(ctx) })
 	mux.HandleFunc(jobs.TypeLaunchAdmit, func(ctx context.Context, _ *asynq.Task) error { return launches.Admit(ctx) })
 
