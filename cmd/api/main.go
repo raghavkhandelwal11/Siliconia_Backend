@@ -18,6 +18,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/crypto"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
@@ -77,6 +78,7 @@ func main() {
 		log.Error("storage", "err", err)
 		os.Exit(1)
 	}
+	searchSvc := &search.Service{Pool: pool, Q: authSvc.Q}
 	products := &product.Service{Pool: pool, Q: authSvc.Q, Store: media, Limiter: limiter, Log: log}
 	sellers := &seller.Service{
 		Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL),
@@ -92,7 +94,8 @@ func main() {
 		Catalogue:      &catalogue.Handler{Q: store.New(pool)},
 		Seller:         &seller.Handler{Svc: sellers},
 		Product:        &product.Handler{Svc: products},
-		Search:         &search.Handler{Svc: &search.Service{Pool: pool, Q: authSvc.Q}},
+		Search:         &search.Handler{Svc: searchSvc},
+		PDP:            &pdp.Handler{Svc: &pdp.Service{Q: authSvc.Q, Search: searchSvc}},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,

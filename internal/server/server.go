@@ -11,6 +11,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
@@ -33,6 +34,7 @@ type Deps struct {
 	Seller      *seller.Handler
 	Product     *product.Handler
 	Search      *search.Handler
+	PDP         *pdp.Handler
 }
 
 // New returns the root handler.
@@ -59,6 +61,16 @@ func New(d Deps) http.Handler {
 		if d.Search != nil {
 			d.Search.Routes(api)
 		}
+		if d.PDP != nil {
+			d.PDP.PublicRoutes(api)
+			// The live block works for everyone and reads the session when there is one.
+			api.Group(func(g chi.Router) {
+				if d.AuthService != nil {
+					g.Use(auth.Authenticate(d.AuthService))
+				}
+				d.PDP.ViewerRoutes(g)
+			})
+		}
 		if d.Auth != nil {
 			api.Group(func(api chi.Router) {
 				api.Use(auth.Authenticate(d.AuthService), auth.CSRF)
@@ -69,6 +81,7 @@ func New(d Deps) http.Handler {
 				if d.Product != nil {
 					d.Product.Routes(api)
 				}
+
 			})
 		}
 	})

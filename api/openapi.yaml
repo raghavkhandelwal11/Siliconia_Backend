@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -959,6 +959,58 @@ paths:
                 properties:
                   suggestions: { type: array, items: { $ref: "#/components/schemas/Suggestion" } }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /products/{slug}:
+    get:
+      operationId: getProduct
+      summary: A live product for its page (static, cacheable for 60 s)
+      tags: [catalogue]
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductPage" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /products/{id}/live:
+    get:
+      operationId: getProductLive
+      summary: Current price, stock, Electrons and the viewer's actions (never cached)
+      description: Works signed out; when the session cookie is present the actions follow the viewer's role.
+      tags: [catalogue]
+      security: [{}, { sessionCookie: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Live block
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductLive" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /products/{id}/similar:
+    get:
+      operationId: getSimilarProducts
+      summary: Up to 8 live products from the same sub-category, closest in price
+      tags: [catalogue]
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Similar products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ProductCard" } }
+        "429": { $ref: "#/components/responses/RateLimited" }
 components:
   securitySchemes:
     sessionCookie:
@@ -1282,6 +1334,97 @@ components:
         slug: { type: string }
         coverUrl: { type: string }
         brand: { type: string }
+    ProductPage:
+      type: object
+      required: [id, slug, name, brand, model, description, warranty, originCountry, isLocal, ratingAvg, ratingCount, category, seller, specs, variants, images, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        brand: { type: string }
+        model: { type: string }
+        description: { type: string }
+        warranty: { type: string }
+        originCountry: { type: string }
+        isLocal: { type: boolean }
+        ratingAvg: { type: number }
+        ratingCount: { type: integer }
+        category:
+          type: object
+          required: [slug, name]
+          properties:
+            slug: { type: string }
+            name: { type: string }
+            parentSlug: { type: string }
+            parentName: { type: string }
+            icon: { type: string }
+        seller:
+          type: object
+          required: [storeName, verified]
+          properties:
+            storeName: { type: string }
+            verified: { type: boolean }
+        specs:
+          type: array
+          items:
+            type: object
+            required: [key, label, value]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              value: {}
+              unit: { type: string }
+              main: { type: boolean }
+        variants:
+          type: array
+          items:
+            type: object
+            required: [id, sku, attrs, mrpPaise, pricePaise]
+            properties:
+              id: { type: string, format: uuid }
+              sku: { type: string }
+              attrs: { type: object, additionalProperties: { type: string } }
+              mrpPaise: { type: integer, format: int64 }
+              pricePaise: { type: integer, format: int64 }
+        images:
+          type: array
+          items:
+            type: object
+            required: [url, alt, width, height]
+            properties:
+              url: { type: string }
+              alt: { type: string }
+              width: { type: integer }
+              height: { type: integer }
+        updatedAt: { type: string, format: date-time }
+    ProductLive:
+      type: object
+      required: [variants, viewer, isMember, actions]
+      properties:
+        variants:
+          type: array
+          items:
+            type: object
+            required: [id, pricePaise, mrpPaise, available, electronsNonMember, electronsMember]
+            properties:
+              id: { type: string, format: uuid }
+              pricePaise: { type: integer, format: int64 }
+              mrpPaise: { type: integer, format: int64 }
+              available: { type: integer }
+              electronsNonMember: { type: integer, format: int64 }
+              electronsMember: { type: integer, format: int64 }
+        viewer: { type: string, enum: [ANONYMOUS, BUYER, SELLER, PROMOTER, CREATOR, ADMIN] }
+        isMember: { type: boolean }
+        actions:
+          type: array
+          items:
+            type: object
+            required: [key, enabled]
+            properties:
+              key: { type: string, enum: [buy_now, add_to_cart, wishlist, edit, promote, request_demo, add_review, hide] }
+              enabled: { type: boolean }
+              reason: { type: string, enum: [SIGN_IN, COMING_M2, COMING_M3, COMING_M4, COMING_M5, OUT_OF_STOCK, OTHER_ROLE] }
+              href: { type: string }
     Health:
       type: object
       required: [status, version, mode]

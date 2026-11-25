@@ -267,6 +267,101 @@ func (q *Queries) GetProductForUpdate(ctx context.Context, id uuid.UUID) (Produc
 	return i, err
 }
 
+const getPublicProduct = `-- name: GetPublicProduct :one
+SELECT p.id, p.seller_id, p.category_id, p.slug, p.name, p.brand, p.model, p.description, p.warranty, p.origin_country, p.is_local, p.specs, p.status, p.search, p.rating_avg, p.rating_count, p.is_synthetic, p.published_at, p.created_at, p.updated_at, p.version, sp.store_name, sp.verified_tag, sp.account_id AS seller_account
+FROM products p
+JOIN accounts a ON a.id = p.seller_id AND a.status = 'ACTIVE' AND a.approval = 'APPROVED'
+JOIN seller_profiles sp ON sp.account_id = p.seller_id
+WHERE p.slug = $1 AND p.status = 'ACTIVE'
+`
+
+type GetPublicProductRow struct {
+	Product       Product   `json:"product"`
+	StoreName     string    `json:"storeName"`
+	VerifiedTag   bool      `json:"verifiedTag"`
+	SellerAccount uuid.UUID `json:"sellerAccount"`
+}
+
+// A live product from an active, approved seller (what shoppers may see).
+func (q *Queries) GetPublicProduct(ctx context.Context, slug string) (GetPublicProductRow, error) {
+	row := q.db.QueryRow(ctx, getPublicProduct, slug)
+	var i GetPublicProductRow
+	err := row.Scan(
+		&i.Product.ID,
+		&i.Product.SellerID,
+		&i.Product.CategoryID,
+		&i.Product.Slug,
+		&i.Product.Name,
+		&i.Product.Brand,
+		&i.Product.Model,
+		&i.Product.Description,
+		&i.Product.Warranty,
+		&i.Product.OriginCountry,
+		&i.Product.IsLocal,
+		&i.Product.Specs,
+		&i.Product.Status,
+		&i.Product.Search,
+		&i.Product.RatingAvg,
+		&i.Product.RatingCount,
+		&i.Product.IsSynthetic,
+		&i.Product.PublishedAt,
+		&i.Product.CreatedAt,
+		&i.Product.UpdatedAt,
+		&i.Product.Version,
+		&i.StoreName,
+		&i.VerifiedTag,
+		&i.SellerAccount,
+	)
+	return i, err
+}
+
+const getPublicProductByID = `-- name: GetPublicProductByID :one
+SELECT p.id, p.seller_id, p.category_id, p.slug, p.name, p.brand, p.model, p.description, p.warranty, p.origin_country, p.is_local, p.specs, p.status, p.search, p.rating_avg, p.rating_count, p.is_synthetic, p.published_at, p.created_at, p.updated_at, p.version, sp.store_name, sp.verified_tag, sp.account_id AS seller_account
+FROM products p
+JOIN accounts a ON a.id = p.seller_id AND a.status = 'ACTIVE' AND a.approval = 'APPROVED'
+JOIN seller_profiles sp ON sp.account_id = p.seller_id
+WHERE p.id = $1 AND p.status = 'ACTIVE'
+`
+
+type GetPublicProductByIDRow struct {
+	Product       Product   `json:"product"`
+	StoreName     string    `json:"storeName"`
+	VerifiedTag   bool      `json:"verifiedTag"`
+	SellerAccount uuid.UUID `json:"sellerAccount"`
+}
+
+func (q *Queries) GetPublicProductByID(ctx context.Context, id uuid.UUID) (GetPublicProductByIDRow, error) {
+	row := q.db.QueryRow(ctx, getPublicProductByID, id)
+	var i GetPublicProductByIDRow
+	err := row.Scan(
+		&i.Product.ID,
+		&i.Product.SellerID,
+		&i.Product.CategoryID,
+		&i.Product.Slug,
+		&i.Product.Name,
+		&i.Product.Brand,
+		&i.Product.Model,
+		&i.Product.Description,
+		&i.Product.Warranty,
+		&i.Product.OriginCountry,
+		&i.Product.IsLocal,
+		&i.Product.Specs,
+		&i.Product.Status,
+		&i.Product.Search,
+		&i.Product.RatingAvg,
+		&i.Product.RatingCount,
+		&i.Product.IsSynthetic,
+		&i.Product.PublishedAt,
+		&i.Product.CreatedAt,
+		&i.Product.UpdatedAt,
+		&i.Product.Version,
+		&i.StoreName,
+		&i.VerifiedTag,
+		&i.SellerAccount,
+	)
+	return i, err
+}
+
 const getUploadByKey = `-- name: GetUploadByKey :one
 SELECT id, owner_id, purpose, storage_key, content_type, bytes, width, height, created_at FROM uploads WHERE storage_key = $1
 `
