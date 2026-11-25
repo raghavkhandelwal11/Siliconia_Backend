@@ -33,6 +33,11 @@ handle /test-inbox* {
 	reverse_proxy sim-notify:9005
 }
 
+# sim-pay hosted checkout pages (its /v1 API stays internal).
+handle /pay/* {
+	reverse_proxy sim-pay:9001
+}
+
 # Everything else is the Next.js web app.
 handle {
 	reverse_proxy {$WEB_UPSTREAM} {

@@ -12,6 +12,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
@@ -37,6 +38,7 @@ type Deps struct {
 	Search      *search.Handler
 	PDP         *pdp.Handler
 	Cart        *cart.Handler
+	Payment     *payment.Handler
 }
 
 // New returns the root handler.
@@ -62,6 +64,9 @@ func New(d Deps) http.Handler {
 		}
 		if d.Search != nil {
 			d.Search.Routes(api)
+		}
+		if d.Payment != nil {
+			d.Payment.Routes(api) // signed webhooks: no session, no CSRF
 		}
 		if d.PDP != nil {
 			d.PDP.PublicRoutes(api)

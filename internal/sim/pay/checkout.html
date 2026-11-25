@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>sim-pay checkout · TEST MODE</title>
+<style>
+  :root { --ink:#0e1526; --muted:#586174; --line:#e2e6ef; --brand:#4f3ff0; --brand2:#0891b2; --bg:#f6f7fb; --danger:#c2410c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  .test { background:#b3261e; color:#fff; text-align:center; padding:8px 12px; font-weight:600;
+          background-image: repeating-linear-gradient(135deg, rgb(255 255 255 / .1) 0 12px, transparent 12px 24px); }
+  main { max-width: 460px; margin: 28px auto; padding: 0 16px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:20px; padding:22px; box-shadow: 0 6px 24px rgb(14 21 38 / .06); }
+  .merchant { display:flex; justify-content:space-between; align-items:center; }
+  .merchant small { color:var(--muted); }
+  .amount { font-size:32px; font-weight:800; margin:8px 0 4px; }
+  .ref { color:var(--muted); font-size:13px; word-break:break-all; }
+  .tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:20px 0 14px; }
+  .tabs label { border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center; cursor:pointer; font-weight:600; font-size:14px; }
+  input[type=radio] { position:absolute; opacity:0; }
+  #m-upi:checked ~ .tabs label[for=m-upi], #m-card:checked ~ .tabs label[for=m-card], #m-nb:checked ~ .tabs label[for=m-nb] { border-color:var(--brand); background:#eeecff; color:var(--brand); }
+  .pane { display:none; }
+  #m-upi:checked ~ .p-upi, #m-card:checked ~ .p-card, #m-nb:checked ~ .p-nb { display:block; }
+  .field { display:block; margin-bottom:12px; font-size:14px; font-weight:600; }
+  .field input, .field select { display:block; width:100%; margin-top:6px; padding:11px 12px; border:1px solid var(--line); border-radius:12px; font:inherit; }
+  .hint { background:#f6f7fb; border-radius:12px; padding:10px 12px; font-size:13px; color:var(--muted); margin-bottom:12px; }
+  .hint code { color:var(--ink); }
+  button { width:100%; border:0; border-radius:999px; padding:13px; font:inherit; font-weight:700; color:#fff; cursor:pointer;
+           background: linear-gradient(120deg, var(--brand), var(--brand2)); }
+  .error { color:var(--danger); background:#fff4ef; border:1px solid #f3c2a8; border-radius:12px; padding:10px 12px; margin-bottom:12px; }
+  .done { text-align:center; }
+</style>
+</head>
+<body>
+<div class="test">TEST MODE · no real money moves · sim-pay simulator</div>
+<main>
+  <div class="card">
+    <div class="merchant"><strong>Siliconics</strong><small>secured by sim-pay</small></div>
+    <div class="amount">{{.Rupees}}</div>
+    <div class="ref">Order {{.Order.Ref}}</div>
+    {{if .Paid}}
+      <p class="done">This payment is already being processed. You can close this page.</p>
+    {{else}}
+    {{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+    <form method="post">
+      <input type="radio" name="method" value="UPI" id="m-upi" checked>
+      <input type="radio" name="method" value="CARD" id="m-card">
+      <input type="radio" name="method" value="NETBANKING" id="m-nb">
+      <div class="tabs"><label for="m-upi">UPI</label><label for="m-card">Card</label><label for="m-nb">Net banking</label></div>
+      <div class="pane p-upi">
+        <p class="hint">Test UPI IDs: <code>success@sim</code>, <code>failure@sim</code>, <code>pending@sim</code> (about a minute), <code>timeout@sim</code>{{if .Order.Mandate}}, <code>mandate-fail@sim</code> (pays, AutoPay fails){{end}}.</p>
+        <label class="field">UPI ID<input name="vpa" placeholder="success@sim" autocomplete="off"></label>
+      </div>
+      <div class="pane p-card">
+        <p class="hint">Test cards: <code>4111 1111 1111 1111</code> succeeds, <code>4000 0000 0000 0002</code> is declined, <code>4000 0000 0000 9995</code> times out. Any future expiry and CVV.</p>
+        <label class="field">Card number<input name="card" inputmode="numeric" placeholder="4111 1111 1111 1111" autocomplete="off"></label>
+      </div>
+      <div class="pane p-nb">
+        <label class="field">Bank<select name="bank">{{range .Banks}}<option value="{{.Code}}">{{.Name}}</option>{{end}}</select></label>
+      </div>
+      <button type="submit">Pay {{.Rupees}}</button>
+      {{if .Order.Mandate}}<p class="ref" style="margin-top:10px">This also sets up AutoPay for renewals. You can turn it off any time.</p>{{end}}
+    </form>
+    {{end}}
+  </div>
+</main>
+</body>
+</html>

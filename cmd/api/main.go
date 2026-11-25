@@ -19,6 +19,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/crypto"
@@ -30,6 +31,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/kyc"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
+	paymentprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/search"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
@@ -81,6 +83,12 @@ func main() {
 	}
 	searchSvc := &search.Service{Pool: pool, Q: authSvc.Q}
 	carts := &cart.Service{Pool: pool, Q: authSvc.Q}
+	if cfg.ProviderPayment != "sim" {
+		log.Error("payment", "err", "only PROVIDER_PAYMENT=sim exists in this build (paid gateways: paid-later/)")
+		os.Exit(1)
+	}
+	payments := &payment.Service{Pool: pool, Q: authSvc.Q, Log: log,
+		Provider: paymentprovider.NewSim(cfg.SimPayURL, cfg.SimPayAPIKey, []byte(cfg.SimPayWebhookSecret))}
 	products := &product.Service{Pool: pool, Q: authSvc.Q, Store: media, Limiter: limiter, Log: log}
 	sellers := &seller.Service{
 		Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL),
@@ -99,6 +107,7 @@ func main() {
 		Search:         &search.Handler{Svc: searchSvc},
 		PDP:            &pdp.Handler{Svc: &pdp.Service{Q: authSvc.Q, Search: searchSvc, Saved: carts.Saved}},
 		Cart:           &cart.Handler{Svc: carts, Limiter: limiter, Secure: cfg.CookieSecure},
+		Payment:        &payment.Handler{Svc: payments},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,
