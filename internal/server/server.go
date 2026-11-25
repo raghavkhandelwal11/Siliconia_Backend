@@ -14,6 +14,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
@@ -49,6 +50,7 @@ type Deps struct {
 	Orders      *orders.Handler
 	Returns     *returns.Handler
 	Issues      *issues.Handler
+	Notify      *notify.Handler
 }
 
 // New returns the root handler.
@@ -118,6 +120,9 @@ func New(d Deps) http.Handler {
 				}
 				if d.Issues != nil {
 					d.Issues.Routes(api)
+				}
+				if d.Notify != nil {
+					d.Notify.Routes(api)
 				}
 
 			})

@@ -21,6 +21,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
@@ -128,6 +129,7 @@ func main() {
 		Shipping:       &shipping.Handler{Svc: shipments},
 		Returns:        &returns.Handler{Svc: returnSvc},
 		Issues:         &issues.Handler{Svc: &issues.Service{Pool: pool, Q: authSvc.Q, Log: log}},
+		Notify:         &notify.Handler{Svc: &notify.Service{Pool: pool, Q: authSvc.Q, Log: log}, Redis: rdb},
 		Orders:         &orders.Handler{Svc: &orders.Service{Pool: pool, Q: authSvc.Q, Payments: payments, Log: log}},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
@@ -169,7 +171,8 @@ func main() {
 // buildAuth assembles sign-in: messaging adapters, token signer, envelope
 // encryption for TOTP secrets and, when configured, Google sign-in.
 func buildAuth(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, rdb *redis.Client, limiter *ratelimit.Limiter, log *slog.Logger) (*auth.Service, *auth.Handler, error) {
-	msgs, err := messaging.NewRouter(cfg.ProviderSMS, cfg.ProviderWhatsApp, cfg.ProviderEmail, cfg.SimNotifyURL, log)
+	msgs, err := messaging.NewRouter(cfg.ProviderSMS, cfg.ProviderWhatsApp, cfg.ProviderEmail, cfg.SimNotifyURL,
+		messaging.BrevoConfig{APIKey: cfg.BrevoAPIKey, From: cfg.EmailFrom, FromName: cfg.EmailFromName}, log)
 	if err != nil {
 		return nil, nil, err
 	}

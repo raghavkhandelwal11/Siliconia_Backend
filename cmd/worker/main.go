@@ -5,17 +5,22 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/jobs"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/logx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/outbox"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/redisx"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
 
@@ -73,6 +78,29 @@ func main() {
 	q := store.New(pool)
 	checkouts := &checkout.Service{Pool: pool, Q: q, Log: log}
 	issueSvc := &issues.Service{Pool: pool, Q: q, Log: log}
+
+	// Notifications: every outbox event ("event:<topic>") goes through the
+	// router; topics without a template are acknowledged and dropped.
+	rdb, err := redisx.Open(ctx, cfg.RedisURL)
+	if err != nil {
+		log.Error("redis", "err", err)
+		os.Exit(1)
+	}
+	defer rdb.Close()
+	msgs, err := messaging.NewRouter(cfg.ProviderSMS, cfg.ProviderWhatsApp, cfg.ProviderEmail, cfg.SimNotifyURL,
+		messaging.BrevoConfig{APIKey: cfg.BrevoAPIKey, From: cfg.EmailFrom, FromName: cfg.EmailFromName}, log)
+	if err != nil {
+		log.Error("messaging", "err", err)
+		os.Exit(1)
+	}
+	notifier := &notify.Service{Pool: pool, Q: q, Messenger: msgs, PublicURL: cfg.PublicBaseURL, Log: log,
+		Publish: func(ctx context.Context, account uuid.UUID, it notify.Item) error {
+			return rdb.Publish(ctx, notify.Channel(account), notify.MarshalItem(it)).Err()
+		}}
+	mux.HandleFunc("event:", func(ctx context.Context, t *asynq.Task) error {
+		id, _ := asynq.GetTaskID(ctx)
+		return notifier.Handle(ctx, strings.TrimPrefix(t.Type(), "event:"), id, t.Payload())
+	})
 	mux.HandleFunc(jobs.TypeCloseIssues, func(ctx context.Context, _ *asynq.Task) error {
 		n, err := issueSvc.CloseResolved(ctx)
 		if n > 0 {

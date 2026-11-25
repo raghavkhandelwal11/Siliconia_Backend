@@ -1,9 +1,11 @@
 package checkout_test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/png"
 	"io"
@@ -30,6 +32,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
@@ -77,6 +80,8 @@ type env struct {
 	ord    *orders.Service
 	ret    *returns.Service
 	iss    *issues.Service
+	note   *notify.Service
+	sent   *recorder
 }
 
 func setup(t *testing.T) *env {
@@ -94,7 +99,7 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments, issues CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments, issues, notifications, notification_prefs CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := catalogue.Seed(ctx, pool); err != nil {
@@ -118,10 +123,15 @@ func setup(t *testing.T) *env {
 	ret := &returns.Service{Pool: pool, Q: q, Payments: pays, Log: log}
 	ships.Returns = ret.OnTracking
 	iss := &issues.Service{Pool: pool, Q: q, Log: log}
+	sent := &recorder{}
+	note := &notify.Service{Pool: pool, Q: q, Messenger: sent, PublicURL: "http://shop.test", Log: log,
+		Publish: func(ctx context.Context, account uuid.UUID, it notify.Item) error {
+			return rdb.Publish(ctx, notify.Channel(account), notify.MarshalItem(it)).Err()
+		}}
 	srv := httptest.NewServer(server.New(server.Deps{
 		Log: log, Health: &health.Handler{}, AuthService: authSvc, Auth: auth.NewHandler(authSvc, nil, false),
 		Cart:    &cart.Handler{Svc: &cart.Service{Pool: pool, Q: q}},
-		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships}, Orders: &orders.Handler{Svc: ord}, Returns: &returns.Handler{Svc: ret}, Issues: &issues.Handler{Svc: iss},
+		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships}, Orders: &orders.Handler{Svc: ord}, Returns: &returns.Handler{Svc: ret}, Issues: &issues.Handler{Svc: iss}, Notify: &notify.Handler{Svc: note, Redis: rdb, StreamFor: 3 * time.Second},
 	}))
 	t.Cleanup(srv.Close)
 	sim := simpay.New(simpay.Config{PublicURL: "http://shop.test", APIKey: "k", WebhookURL: srv.URL + "/api/v1/webhooks/payment",
@@ -136,7 +146,7 @@ func setup(t *testing.T) *env {
 	ships.Provider = shipprovider.NewSim(shipSrv.URL, "sk", shipSecret)
 	ret.Courier = ships.Provider
 	return &env{t: t, ctx: ctx, pool: pool, srv: srv, prods: &product.Service{Pool: pool, Q: q, Store: storage.NewMemory(), Log: log}, inbox: in, mr: mr,
-		co: co, sim: sim, simURL: simSrv.URL, ship: ships, ships: shipSim, ord: ord, ret: ret, iss: iss}
+		co: co, sim: sim, simURL: simSrv.URL, ship: ships, ships: shipSim, ord: ord, ret: ret, iss: iss, note: note, sent: sent}
 }
 
 // listed creates a live product with one variant and returns its variant ID.
@@ -978,5 +988,169 @@ func TestIssueConversation(t *testing.T) {
 	queue, _ := e.iss.List(e.ctx, support, "CLOSED")
 	if len(queue) != 1 || e.outbox("issue.updated") != 6 {
 		t.Fatalf("queue %d, events %d", len(queue), e.outbox("issue.updated"))
+	}
+}
+
+// recorder is a Messenger that keeps what was sent and can be told to fail.
+type recorder struct {
+	mu   sync.Mutex
+	msgs []messaging.Message
+	fail map[messaging.Channel]bool
+}
+
+func (r *recorder) Send(_ context.Context, m messaging.Message) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.fail[m.Channel] {
+		return "", errors.New("provider down")
+	}
+	r.msgs = append(r.msgs, m)
+	return "ref", nil
+}
+
+func (r *recorder) count(ch messaging.Channel, template string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	n := 0
+	for _, m := range r.msgs {
+		if m.Channel == ch && m.Template == template {
+			n++
+		}
+	}
+	return n
+}
+
+// drain runs every outbox event through the notifier, as the worker does.
+func (e *env) drain() error {
+	e.t.Helper()
+	rows, err := e.pool.Query(e.ctx, `SELECT id, topic, payload FROM outbox ORDER BY created_at, id`)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	type ev struct {
+		id      uuid.UUID
+		topic   string
+		payload []byte
+	}
+	var evs []ev
+	for rows.Next() {
+		var x ev
+		_ = rows.Scan(&x.id, &x.topic, &x.payload)
+		evs = append(evs, x)
+	}
+	rows.Close()
+	var errs []error
+	for _, x := range evs {
+		errs = append(errs, e.note.Handle(e.ctx, x.topic, x.id.String(), x.payload))
+	}
+	return errors.Join(errs...)
+}
+
+func TestNotificationsAreRoutedOnceAndStreamed(t *testing.T) {
+	e := setup(t)
+	bank, _, seller := e.listed("Volt Store", "Volt Cell", 279900, 5)
+	e.pickup(seller)
+	b, addr := e.buyer("9876511111")
+
+	// Live stream: the unread count first, then each new notification.
+	req, _ := http.NewRequest("GET", e.srv.URL+"/api/v1/me/notifications/stream", nil)
+	res, err := (&http.Client{Jar: b.jar}).Do(req)
+	if err != nil || res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("stream: %v %v", res, err)
+	}
+	defer res.Body.Close()
+	lines := make(chan string, 64)
+	go func() {
+		sc := bufio.NewScanner(res.Body)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	waitFor := func(prefix string) string {
+		t.Helper()
+		deadline := time.After(3 * time.Second)
+		for {
+			select {
+			case l, ok := <-lines:
+				if !ok {
+					t.Fatalf("stream ended before %q", prefix)
+				}
+				if strings.HasPrefix(l, prefix) {
+					return l
+				}
+			case <-deadline:
+				t.Fatalf("no %q on the stream", prefix)
+			}
+		}
+	}
+	if l := waitFor("data:"); !strings.Contains(l, `"unread":0`) {
+		t.Fatalf("first event: %s", l)
+	}
+
+	o := e.placeCOD(b, addr, bank, "key-notify-01")
+	e.sent.fail = map[messaging.Channel]bool{messaging.WhatsApp: true}
+	if err := e.drain(); err == nil {
+		t.Fatal("a failed channel must be reported so the queue retries")
+	}
+	if l := waitFor("event: notification"); l == "" {
+		t.Fatal("no live notification")
+	}
+	if l := waitFor("data:"); !strings.Contains(l, "confirmed") {
+		t.Fatalf("live payload: %s", l)
+	}
+	if e.sent.count(messaging.SMS, "order_confirmed") != 1 || e.sent.count(messaging.WhatsApp, "order_confirmed") != 0 {
+		t.Fatalf("first attempt: %+v", e.sent.msgs)
+	}
+	// The retry sends only what failed; nothing is duplicated.
+	e.sent.fail = nil
+	if err := e.drain(); err != nil {
+		t.Fatal(err)
+	}
+	if e.sent.count(messaging.SMS, "order_confirmed") != 1 || e.sent.count(messaging.WhatsApp, "order_confirmed") != 1 {
+		t.Fatalf("retry: %+v", e.sent.msgs)
+	}
+	var skipped string
+	_ = e.pool.QueryRow(e.ctx, `SELECT d.status FROM notification_deliveries d JOIN notifications n ON n.id = d.notification_id
+		WHERE n.template = 'order_confirmed' AND d.channel = 'email'`).Scan(&skipped)
+	if skipped != "SKIPPED" { // the buyer has no email address
+		t.Fatalf("email without an address: %q", skipped)
+	}
+	var sellerNotes int
+	_ = e.pool.QueryRow(e.ctx, `SELECT count(*) FROM notifications WHERE account_id = $1 AND template = 'seller_new_order'`, seller).Scan(&sellerNotes)
+	if sellerNotes != 1 {
+		t.Fatalf("seller told about the order: %d", sellerNotes)
+	}
+
+	// Preferences: WhatsApp off means no WhatsApp for the next updates.
+	if st, p := b.do("PUT", "/me/notification-prefs", map[string]bool{"whatsapp": false, "email": true, "marketing": false}, true); st != 200 || p["whatsapp"] != false {
+		t.Fatalf("prefs: %d %v", st, p)
+	}
+	if _, err := e.ship.Ship(e.ctx, seller, uuid.MustParse(subOrder(o)["id"].(string)), 0); err != nil {
+		t.Fatal(err)
+	}
+	e.ships.Wait()
+	if err := e.drain(); err != nil {
+		t.Fatal(err)
+	}
+	if e.sent.count(messaging.SMS, "order_shipped") != 1 || e.sent.count(messaging.WhatsApp, "order_shipped") != 0 || e.sent.count(messaging.SMS, "order_delivered") != 1 {
+		t.Fatalf("after shipping: %+v", e.sent.msgs)
+	}
+
+	_, list := b.do("GET", "/me/notifications", nil, false)
+	items := list["items"].([]any)
+	if len(items) < 3 || list["unread"].(float64) != float64(len(items)) || items[0].(map[string]any)["template"] != "order_delivered" {
+		t.Fatalf("inbox: %v", list)
+	}
+	first := items[0].(map[string]any)["id"].(string)
+	if _, r := b.do("POST", "/me/notifications/read", map[string]any{"ids": []string{first}}, true); r["unread"].(float64) != float64(len(items)-1) {
+		t.Fatalf("read one: %v", r)
+	}
+	if _, r := b.do("POST", "/me/notifications/read", map[string]any{"ids": []string{}}, true); r["unread"].(float64) != 0 {
+		t.Fatalf("read all: %v", r)
+	}
+	other, _ := e.buyer("9876533333")
+	if _, l := other.do("GET", "/me/notifications", nil, false); len(l["items"].([]any)) != 0 {
+		t.Fatalf("someone else's inbox: %v", l)
 	}
 }
