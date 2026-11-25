@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
@@ -79,6 +80,7 @@ func main() {
 		os.Exit(1)
 	}
 	searchSvc := &search.Service{Pool: pool, Q: authSvc.Q}
+	carts := &cart.Service{Pool: pool, Q: authSvc.Q}
 	products := &product.Service{Pool: pool, Q: authSvc.Q, Store: media, Limiter: limiter, Log: log}
 	sellers := &seller.Service{
 		Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL),
@@ -95,7 +97,8 @@ func main() {
 		Seller:         &seller.Handler{Svc: sellers},
 		Product:        &product.Handler{Svc: products},
 		Search:         &search.Handler{Svc: searchSvc},
-		PDP:            &pdp.Handler{Svc: &pdp.Service{Q: authSvc.Q, Search: searchSvc}},
+		PDP:            &pdp.Handler{Svc: &pdp.Service{Q: authSvc.Q, Search: searchSvc, Saved: carts.Saved}},
+		Cart:           &cart.Handler{Svc: carts, Limiter: limiter, Secure: cfg.CookieSecure},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,

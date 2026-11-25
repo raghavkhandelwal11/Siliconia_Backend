@@ -127,10 +127,10 @@ func TestProductPage(t *testing.T) {
 	if live.Viewer != "ANONYMOUS" || live.Variants[0].Available != 7 || live.Variants[0].ElectronsNonMember != 95 || live.Variants[0].ElectronsMember != 380 {
 		t.Fatalf("live: %+v", live)
 	}
-	if live.Actions[0].Key != "buy_now" || live.Actions[0].Reason != "SIGN_IN" {
+	if live.Actions[0].Key != "add_to_cart" || !live.Actions[0].Enabled || live.Actions[2].Reason != "SIGN_IN" {
 		t.Fatalf("anonymous actions: %+v", live.Actions)
 	}
-	for role, want := range map[auth.Role]string{auth.RoleBuyer: "buy_now", auth.RoleCreator: "request_demo", auth.RolePromoter: "promote"} {
+	for role, want := range map[auth.Role]string{auth.RoleBuyer: "add_to_cart", auth.RoleCreator: "request_demo", auth.RolePromoter: "promote"} {
 		l, err := svc.LiveBlock(ctx, main.ID, &auth.Claims{Subject: uuid.New(), Role: role})
 		if err != nil || l.Actions[0].Key != want {
 			t.Errorf("%s actions: %+v %v", role, l.Actions, err)

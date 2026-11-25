@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -1011,6 +1011,130 @@ paths:
                 properties:
                   items: { type: array, items: { $ref: "#/components/schemas/ProductCard" } }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /cart:
+    get:
+      operationId: getCart
+      summary: The cart, grouped by seller, with stock and price warnings (UI-BUY-01)
+      description: |
+        Guests are identified by the sx_dev cookie, set on their first cart write together with sx_csrf.
+        When a signed-in buyer still has a guest cart on this device, it is merged first and `merged` says so.
+      tags: [cart]
+      security: [{}, { sessionCookie: [] }]
+      responses:
+        "200":
+          description: The cart
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /cart/merge:
+    post:
+      operationId: mergeCart
+      summary: Merge this device's guest cart into the buyer's cart (also done by GET /cart)
+      tags: [cart]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      responses:
+        "200":
+          description: The cart
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /cart/items/{variantId}:
+    put:
+      operationId: setCartItem
+      summary: Set a line's quantity (1–10, capped by stock; 0 removes it)
+      tags: [cart]
+      security: [{ csrfHeader: [] }, { sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: variantId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [qty]
+              properties:
+                qty: { type: integer, minimum: 0, maximum: 10 }
+      responses:
+        "200":
+          description: The cart
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      operationId: removeCartItem
+      summary: Remove a line
+      tags: [cart]
+      security: [{ csrfHeader: [] }, { sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: variantId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The cart
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cart" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /wishlist:
+    get:
+      operationId: getWishlist
+      summary: Saved products with price-drop and stock state (UI-BUY-10)
+      tags: [cart]
+      responses:
+        "200":
+          description: Wishlist
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/WishItem" } }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /wishlist/{variantId}:
+    put:
+      operationId: saveToWishlist
+      summary: Save a variant (buyers)
+      tags: [cart]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: variantId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Saved }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    delete:
+      operationId: removeFromWishlist
+      summary: Remove a saved variant
+      tags: [cart]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: variantId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 components:
   securitySchemes:
     sessionCookie:
@@ -1399,8 +1523,9 @@ components:
         updatedAt: { type: string, format: date-time }
     ProductLive:
       type: object
-      required: [variants, viewer, isMember, actions]
+      required: [variants, viewer, isMember, actions, saved]
       properties:
+        saved: { type: array, items: { type: string, format: uuid }, description: "Variants in the buyer's wishlist" }
         variants:
           type: array
           items:
@@ -1425,6 +1550,66 @@ components:
               enabled: { type: boolean }
               reason: { type: string, enum: [SIGN_IN, COMING_M2, COMING_M3, COMING_M4, COMING_M5, OUT_OF_STOCK, OTHER_ROLE] }
               href: { type: string }
+    CartLine:
+      type: object
+      required: [variantId, productId, slug, name, brand, attrs, qty, pricePaise, mrpPaise, priceAtAddPaise, available]
+      properties:
+        variantId: { type: string, format: uuid }
+        productId: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        brand: { type: string }
+        attrs: { type: object, additionalProperties: { type: string } }
+        coverUrl: { type: string }
+        qty: { type: integer }
+        pricePaise: { type: integer, format: int64 }
+        mrpPaise: { type: integer, format: int64 }
+        priceAtAddPaise: { type: integer, format: int64 }
+        available: { type: integer }
+        problem: { type: string, enum: [UNAVAILABLE, OUT_OF_STOCK, LOW_STOCK] }
+    Cart:
+      type: object
+      required: [groups, itemCount, subtotalPaise, mrpTotalPaise, savingsPaise, electronsNonMember, electronsMember, canCheckout]
+      properties:
+        groups:
+          type: array
+          items:
+            type: object
+            required: [storeName, lines, subtotalPaise]
+            properties:
+              storeName: { type: string }
+              lines: { type: array, items: { $ref: "#/components/schemas/CartLine" } }
+              subtotalPaise: { type: integer, format: int64 }
+        itemCount: { type: integer }
+        subtotalPaise: { type: integer, format: int64 }
+        mrpTotalPaise: { type: integer, format: int64 }
+        savingsPaise: { type: integer, format: int64 }
+        electronsNonMember: { type: integer, format: int64 }
+        electronsMember: { type: integer, format: int64 }
+        canCheckout: { type: boolean, description: False while any line has a problem }
+        merged:
+          type: object
+          required: [lines, adjusted]
+          properties:
+            lines: { type: integer }
+            adjusted: { type: boolean, description: Some quantities were reduced or lines dropped }
+    WishItem:
+      type: object
+      required: [variantId, slug, name, brand, attrs, pricePaise, mrpPaise, priceAtAddPaise, priceDropped, inStock, buyable, addedAt]
+      properties:
+        variantId: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        brand: { type: string }
+        attrs: { type: object, additionalProperties: { type: string } }
+        coverUrl: { type: string }
+        pricePaise: { type: integer, format: int64 }
+        mrpPaise: { type: integer, format: int64 }
+        priceAtAddPaise: { type: integer, format: int64 }
+        priceDropped: { type: boolean }
+        inStock: { type: boolean }
+        buyable: { type: boolean }
+        addedAt: { type: string, format: date-time }
     Health:
       type: object
       required: [status, version, mode]

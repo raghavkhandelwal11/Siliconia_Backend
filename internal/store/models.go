@@ -178,6 +178,22 @@ type AuditLog struct {
 	At           time.Time   `json:"at"`
 }
 
+type Cart struct {
+	ID        uuid.UUID  `json:"id"`
+	AccountID *uuid.UUID `json:"accountId"`
+	DeviceID  *string    `json:"deviceId"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+}
+
+type CartItem struct {
+	CartID          uuid.UUID `json:"cartId"`
+	VariantID       uuid.UUID `json:"variantId"`
+	Qty             int32     `json:"qty"`
+	PriceAtAddPaise int64     `json:"priceAtAddPaise"`
+	AddedAt         time.Time `json:"addedAt"`
+}
+
 type Category struct {
 	ID            uuid.UUID  `json:"id"`
 	ParentID      *uuid.UUID `json:"parentId"`
@@ -376,4 +392,13 @@ type WebhookEvent struct {
 	ReceivedAt  time.Time  `json:"receivedAt"`
 	Payload     []byte     `json:"payload"`
 	ProcessedAt *time.Time `json:"processedAt"`
+}
+
+type WishlistItem struct {
+	AccountID       uuid.UUID `json:"accountId"`
+	VariantID       uuid.UUID `json:"variantId"`
+	PriceAtAddPaise int64     `json:"priceAtAddPaise"`
+	NotifyStock     bool      `json:"notifyStock"`
+	NotifyPrice     bool      `json:"notifyPrice"`
+	CreatedAt       time.Time `json:"createdAt"`
 }

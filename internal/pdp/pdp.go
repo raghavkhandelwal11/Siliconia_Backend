@@ -89,6 +89,8 @@ type Product struct {
 type Service struct {
 	Q      *store.Queries
 	Search *search.Service
+	// Saved reports which variants a buyer has in their wishlist (optional).
+	Saved func(ctx context.Context, account uuid.UUID, variants []uuid.UUID) ([]uuid.UUID, error)
 }
 
 // Get returns the static product for a slug.
@@ -173,6 +175,8 @@ type Live struct {
 	Viewer   string        `json:"viewer"` // ANONYMOUS or the effective role
 	IsMember bool          `json:"isMember"`
 	Actions  []Action      `json:"actions"`
+	// Saved lists the variants in the buyer's wishlist.
+	Saved []uuid.UUID `json:"saved"`
 }
 
 // ElectronRules are the earning rules from settings (BRD 4; config table).
@@ -192,13 +196,16 @@ func (r ElectronRules) Earn(pricePaise int64, member bool) int64 {
 	return int64(math.Ceil(float64(pricePaise) * float64(bps) / 10000 / 100))
 }
 
-func (s *Service) rules(ctx context.Context) ElectronRules {
+func (s *Service) rules(ctx context.Context) ElectronRules { return Rules(ctx, s.Q) }
+
+// Rules loads the Electron earning rules from settings, with BRD defaults.
+func Rules(ctx context.Context, q *store.Queries) ElectronRules {
 	r := ElectronRules{NonMemberMinPaise: 250000, NonMemberBps: 50, MemberMinPaise: 80000, MemberBps: 200}
 	for key, dst := range map[string]*int64{
 		"electrons.nonmember.min_paise": &r.NonMemberMinPaise, "electrons.nonmember.rate_bps": &r.NonMemberBps,
 		"electrons.member.min_paise": &r.MemberMinPaise, "electrons.member.rate_bps": &r.MemberBps,
 	} {
-		if c, err := s.Q.GetConfig(ctx, key); err == nil {
+		if c, err := q.GetConfig(ctx, key); err == nil {
 			var n int64
 			if json.Unmarshal(c.Value, &n) == nil {
 				*dst = n
@@ -222,7 +229,7 @@ func (s *Service) LiveBlock(ctx context.Context, productID uuid.UUID, viewer *au
 		return Live{}, err
 	}
 	rules := s.rules(ctx)
-	out := Live{Variants: []LiveVariant{}, Viewer: "ANONYMOUS"}
+	out := Live{Variants: []LiveVariant{}, Viewer: "ANONYMOUS", Saved: []uuid.UUID{}}
 	anyStock := false
 	for _, v := range vars {
 		avail := v.Quantity - v.Reserved - v.Sold
@@ -238,32 +245,35 @@ func (s *Service) LiveBlock(ctx context.Context, productID uuid.UUID, viewer *au
 		out.Viewer = string(role)
 	}
 	out.Actions = actions(role, viewer, row.SellerAccount, productID, anyStock)
+	if role == auth.RoleBuyer && s.Saved != nil {
+		ids := make([]uuid.UUID, len(vars))
+		for i, v := range vars {
+			ids[i] = v.ID
+		}
+		if saved, err := s.Saved(ctx, viewer.Subject, ids); err == nil && saved != nil {
+			out.Saved = saved
+		}
+	}
 	return out, nil
 }
 
-// actions maps the viewer's role to the action area (UI-PUB-05). Cart and
-// checkout arrive in M2, launch deals in M3, creators and promoters in M4.
+// actions maps the viewer's role to the action area (UI-PUB-05). Checkout
+// (buy now) arrives with T2.3, launch deals in M3, creators and promoters in M4.
 func actions(role auth.Role, viewer *auth.Claims, sellerID, productID uuid.UUID, inStock bool) []Action {
-	buy := func(reason string) []Action {
-		if !inStock && reason == "" {
-			reason = "OUT_OF_STOCK"
-		}
-		return []Action{
-			{Key: "buy_now", Reason: reason},
-			{Key: "add_to_cart", Reason: reason},
-			{Key: "wishlist", Reason: "COMING_M2"},
-		}
+	cart := Action{Key: "add_to_cart", Enabled: inStock}
+	if !inStock {
+		cart.Reason = "OUT_OF_STOCK"
 	}
 	switch role {
-	case "":
-		return buy("SIGN_IN")
+	case "": // guests can fill a cart; saving needs an account
+		return []Action{cart, {Key: "buy_now", Reason: "COMING_M2"}, {Key: "wishlist", Reason: "SIGN_IN"}}
 	case auth.RoleBuyer:
-		return buy("COMING_M2")
+		return []Action{cart, {Key: "buy_now", Reason: "COMING_M2"}, {Key: "wishlist", Enabled: true}}
 	case auth.RoleSeller:
 		if viewer.Subject == sellerID {
 			return []Action{{Key: "edit", Enabled: true, Href: fmt.Sprintf("/seller/products/%s", productID)}}
 		}
-		return []Action{{Key: "buy_now", Reason: "OTHER_ROLE"}}
+		return []Action{{Key: "add_to_cart", Reason: "OTHER_ROLE"}}
 	case auth.RolePromoter:
 		return []Action{{Key: "promote", Reason: "COMING_M4"}}
 	case auth.RoleCreator:
