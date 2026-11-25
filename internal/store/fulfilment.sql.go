@@ -15,7 +15,7 @@ import (
 const cancelSubOrder = `-- name: CancelSubOrder :one
 UPDATE sub_orders SET status = 'CANCELLED', cancel_reason = $1, cancelled_by = $2, version = version + 1
 WHERE id = $3 AND status IN ('CONFIRMED', 'PACKED')
-RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at
+RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at, replaces_item_id
 `
 
 type CancelSubOrderParams struct {
@@ -42,12 +42,13 @@ func (q *Queries) CancelSubOrder(ctx context.Context, arg CancelSubOrderParams) 
 		&i.CancelReason,
 		&i.CancelledBy,
 		&i.InvoicedAt,
+		&i.ReplacesItemID,
 	)
 	return i, err
 }
 
 const getSubOrderDetail = `-- name: GetSubOrderDetail :one
-SELECT s.id, s.order_id, s.seller_id, s.status, s.subtotal_paise, s.invoice_no, s.delivered_at, s.return_window_ends_at, s.settled_at, s.version, s.cod_collected_paise, s.cancel_reason, s.cancelled_by, s.invoiced_at, o.number, o.placed_at, o.pay_method, o.address, o.buyer_id, o.payment_id, o.is_synthetic,
+SELECT s.id, s.order_id, s.seller_id, s.status, s.subtotal_paise, s.invoice_no, s.delivered_at, s.return_window_ends_at, s.settled_at, s.version, s.cod_collected_paise, s.cancel_reason, s.cancelled_by, s.invoiced_at, s.replaces_item_id, o.number, o.placed_at, o.pay_method, o.address, o.buyer_id, o.payment_id, o.is_synthetic,
        sp.store_name, sp.legal_name, sp.gstin, sp.pickup_address
 FROM sub_orders s
 JOIN orders o ON o.id = s.order_id
@@ -70,6 +71,7 @@ type GetSubOrderDetailRow struct {
 	CancelReason       *string    `json:"cancelReason"`
 	CancelledBy        *string    `json:"cancelledBy"`
 	InvoicedAt         *time.Time `json:"invoicedAt"`
+	ReplacesItemID     *uuid.UUID `json:"replacesItemId"`
 	Number             string     `json:"number"`
 	PlacedAt           time.Time  `json:"placedAt"`
 	PayMethod          string     `json:"payMethod"`
@@ -101,6 +103,7 @@ func (q *Queries) GetSubOrderDetail(ctx context.Context, id uuid.UUID) (GetSubOr
 		&i.CancelReason,
 		&i.CancelledBy,
 		&i.InvoicedAt,
+		&i.ReplacesItemID,
 		&i.Number,
 		&i.PlacedAt,
 		&i.PayMethod,
@@ -117,7 +120,7 @@ func (q *Queries) GetSubOrderDetail(ctx context.Context, id uuid.UUID) (GetSubOr
 }
 
 const getSubOrderForUpdate = `-- name: GetSubOrderForUpdate :one
-SELECT id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at FROM sub_orders WHERE id = $1 FOR UPDATE
+SELECT id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at, replaces_item_id FROM sub_orders WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetSubOrderForUpdate(ctx context.Context, id uuid.UUID) (SubOrder, error) {
@@ -138,6 +141,7 @@ func (q *Queries) GetSubOrderForUpdate(ctx context.Context, id uuid.UUID) (SubOr
 		&i.CancelReason,
 		&i.CancelledBy,
 		&i.InvoicedAt,
+		&i.ReplacesItemID,
 	)
 	return i, err
 }
@@ -401,7 +405,7 @@ func (q *Queries) SetOrderItemsStatus(ctx context.Context, arg SetOrderItemsStat
 const transitionSubOrder = `-- name: TransitionSubOrder :one
 UPDATE sub_orders SET status = $1, version = version + 1
 WHERE id = $2 AND status::text = ANY($3::text[])
-RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at
+RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at, replaces_item_id
 `
 
 type TransitionSubOrderParams struct {
@@ -430,6 +434,7 @@ func (q *Queries) TransitionSubOrder(ctx context.Context, arg TransitionSubOrder
 		&i.CancelReason,
 		&i.CancelledBy,
 		&i.InvoicedAt,
+		&i.ReplacesItemID,
 	)
 	return i, err
 }

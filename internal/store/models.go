@@ -359,6 +359,30 @@ type InventoryLot struct {
 	UnitCostPaise *int64     `json:"unitCostPaise"`
 }
 
+type Issue struct {
+	ID              uuid.UUID  `json:"id"`
+	Number          string     `json:"number"`
+	BuyerID         uuid.UUID  `json:"buyerId"`
+	OrderID         uuid.UUID  `json:"orderId"`
+	OrderItemID     *uuid.UUID `json:"orderItemId"`
+	Type            string     `json:"type"`
+	Status          string     `json:"status"`
+	FirstResponseAt *time.Time `json:"firstResponseAt"`
+	ResolvedAt      *time.Time `json:"resolvedAt"`
+	ClosedAt        *time.Time `json:"closedAt"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+}
+
+type IssueMessage struct {
+	ID         uuid.UUID `json:"id"`
+	IssueID    uuid.UUID `json:"issueId"`
+	AuthorID   uuid.UUID `json:"authorId"`
+	AuthorRole string    `json:"authorRole"`
+	Body       string    `json:"body"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
 type KycRecord struct {
 	ID           uuid.UUID `json:"id"`
 	AccountID    uuid.UUID `json:"accountId"`
@@ -508,6 +532,27 @@ type Refund struct {
 	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
+type ReturnRequest struct {
+	ID                    uuid.UUID  `json:"id"`
+	Number                string     `json:"number"`
+	OrderItemID           uuid.UUID  `json:"orderItemId"`
+	SubOrderID            uuid.UUID  `json:"subOrderId"`
+	BuyerID               uuid.UUID  `json:"buyerId"`
+	SellerID              uuid.UUID  `json:"sellerId"`
+	Type                  string     `json:"type"`
+	Reason                string     `json:"reason"`
+	Note                  string     `json:"note"`
+	Status                string     `json:"status"`
+	RejectReason          *string    `json:"rejectReason"`
+	DecidedAt             *time.Time `json:"decidedAt"`
+	PickupShipmentID      *uuid.UUID `json:"pickupShipmentId"`
+	ReplacementSubOrderID *uuid.UUID `json:"replacementSubOrderId"`
+	RefundAmountPaise     int64      `json:"refundAmountPaise"`
+	OutcomeNote           string     `json:"outcomeNote"`
+	CreatedAt             time.Time  `json:"createdAt"`
+	UpdatedAt             time.Time  `json:"updatedAt"`
+}
+
 type SellerProfile struct {
 	AccountID       uuid.UUID  `json:"accountId"`
 	BusinessType    *string    `json:"businessType"`
@@ -582,6 +627,7 @@ type SubOrder struct {
 	CancelReason       *string    `json:"cancelReason"`
 	CancelledBy        *string    `json:"cancelledBy"`
 	InvoicedAt         *time.Time `json:"invoicedAt"`
+	ReplacesItemID     *uuid.UUID `json:"replacesItemId"`
 }
 
 type SubOrderEvent struct {

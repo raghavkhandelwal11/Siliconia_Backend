@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 1.2.0
+  version: 1.3.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -1486,6 +1486,220 @@ paths:
               schema: { type: string, format: binary }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /order-items/{id}/returns:
+    post:
+      operationId: requestReturn
+      summary: Return or replace a delivered item within the return window (7 days)
+      tags: [returns]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, reason]
+              properties:
+                type: { type: string, enum: [RETURN, REPLACE] }
+                reason: { type: string, enum: [DAMAGED, DEFECTIVE, WRONG_ITEM, NOT_AS_DESCRIBED, MISSING_PARTS, NO_LONGER_NEEDED] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        "201":
+          description: Requested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Return" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /returns:
+    get:
+      operationId: listReturns
+      summary: The buyer's returns and replacements
+      tags: [returns]
+      responses:
+        "200":
+          description: Returns
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Return" } }
+  /seller/returns:
+    get:
+      operationId: sellerReturns
+      summary: Returns for the seller's items
+      tags: [returns]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Returns
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Return" } }
+  /seller/returns/{id}/decision:
+    post:
+      operationId: decideReturn
+      summary: Approve (books the courier pickup) or reject (with a reason) a return
+      description: |
+        When the item reaches the seller, a RETURN is refunded to the original payment method (REFUNDED) or, for cash
+        on delivery, marked REFUND_PENDING for a bank transfer. A REPLACE creates a zero-value replacement sub-order
+        for the seller to ship (RECEIVED, then REPLACEMENT_SHIPPED), or is refunded when out of stock.
+      tags: [returns]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [approve]
+              properties:
+                approve: { type: boolean }
+                reason: { type: string, maxLength: 300, description: Required to reject }
+      responses:
+        "204": { description: Decided }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /issues:
+    get:
+      operationId: listIssues
+      summary: The buyer's issues
+      tags: [issues]
+      responses:
+        "200":
+          description: Issues
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IssueList" }
+    post:
+      operationId: raiseIssue
+      summary: Raise an issue on an order (3-step form)
+      tags: [issues]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId, type, body]
+              properties:
+                orderId: { type: string, format: uuid }
+                orderItemId: { type: string, format: uuid }
+                type: { type: string, enum: [NOT_DELIVERED, DAMAGED, WRONG_ITEM, MISSING_PARTS, PAYMENT, RETURN_REFUND, OTHER] }
+                body: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        "201":
+          description: Raised
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+        "400": { $ref: "#/components/responses/Error" }
+  /issues/{id}:
+    get:
+      operationId: getIssue
+      summary: One issue with its conversation
+      tags: [issues]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Issue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+        "404": { $ref: "#/components/responses/Error" }
+  /issues/{id}/messages:
+    post:
+      operationId: replyIssue
+      summary: Add a message (moves WAITING_CUSTOMER back to IN_PROGRESS)
+      tags: [issues]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { $ref: "#/components/requestBodies/IssueMessage" }
+      responses:
+        "200":
+          description: Issue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /issues/{id}/reopen:
+    post:
+      operationId: reopenIssue
+      summary: Reopen a resolved issue (closed issues stay closed)
+      tags: [issues]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Issue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/issues:
+    get:
+      operationId: supportIssues
+      summary: Support queue (admin with authenticator), open first
+      tags: [issues]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Issues
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IssueList" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/issues/{id}:
+    get:
+      operationId: supportIssue
+      summary: One issue for support
+      tags: [issues]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Issue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+  /admin/issues/{id}/messages:
+    post:
+      operationId: supportReply
+      summary: Reply as support and set IN_PROGRESS, WAITING_CUSTOMER or RESOLVED
+      tags: [issues]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { $ref: "#/components/requestBodies/IssueMessage" }
+      responses:
+        "200":
+          description: Issue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /webhooks/payment:
     post:
       operationId: paymentWebhook
@@ -1517,6 +1731,16 @@ paths:
         "500": { description: Not applied; the provider retries }
 components:
   requestBodies:
+    IssueMessage:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [body]
+            properties:
+              body: { type: string, minLength: 1, maxLength: 2000 }
+              status: { type: string, enum: [IN_PROGRESS, WAITING_CUSTOMER, RESOLVED], description: Support only }
     CancelReason:
       required: true
       content:
@@ -2101,10 +2325,19 @@ components:
         address: { $ref: "#/components/schemas/DeliveryAddress" }
     OrderItem:
       type: object
-      required: [id, status, name, slug, attrs, qty, unitPricePaise, unitMrpPaise, lineTotalPaise]
+      required: [id, status, canReturn, name, slug, attrs, qty, unitPricePaise, unitMrpPaise, lineTotalPaise]
       properties:
         id: { type: string, format: uuid }
         status: { type: string, enum: [ACTIVE, CANCELLED, RETURNED, REPLACED] }
+        canReturn: { type: boolean }
+        return:
+          type: object
+          required: [id, number, type, status]
+          properties:
+            id: { type: string, format: uuid }
+            number: { type: string }
+            type: { type: string, enum: [RETURN, REPLACE] }
+            status: { type: string }
         name: { type: string }
         slug: { type: string }
         coverUrl: { type: string }
@@ -2132,7 +2365,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, storeName, status, subtotalPaise, items, events, canCancel, hasInvoice]
+            required: [id, storeName, status, subtotalPaise, items, events, canCancel, hasInvoice, isReplacement]
             properties:
               id: { type: string, format: uuid }
               storeName: { type: string }
@@ -2146,6 +2379,7 @@ components:
               cancelledBy: { type: string, enum: [BUYER, SELLER, ADMIN] }
               canCancel: { type: boolean }
               hasInvoice: { type: boolean }
+              isReplacement: { type: boolean }
               shipment:
                 type: object
                 required: [awb, courier, status, events]
@@ -2250,6 +2484,59 @@ components:
             canPack: { type: boolean }
             canShip: { type: boolean }
             canCancel: { type: boolean }
+    Return:
+      type: object
+      required: [id, number, orderId, orderNumber, itemId, productName, attrs, qty, type, reason, status, refundAmountPaise, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        orderId: { type: string, format: uuid }
+        orderNumber: { type: string }
+        itemId: { type: string, format: uuid }
+        productName: { type: string }
+        attrs: { type: object, additionalProperties: { type: string } }
+        coverUrl: { type: string }
+        qty: { type: integer }
+        type: { type: string, enum: [RETURN, REPLACE] }
+        reason: { type: string }
+        note: { type: string }
+        status: { type: string, enum: [REQUESTED, REJECTED, PICKUP_SCHEDULED, PICKED_UP, RECEIVED, REFUNDED, REFUND_PENDING, REPLACEMENT_SHIPPED] }
+        rejectReason: { type: string }
+        pickupAwb: { type: string }
+        refundAmountPaise: { type: integer, format: int64 }
+        outcomeNote: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Issue:
+      type: object
+      required: [id, number, orderId, orderNumber, type, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        orderId: { type: string, format: uuid }
+        orderNumber: { type: string }
+        orderItemId: { type: string, format: uuid }
+        type: { type: string }
+        status: { type: string, enum: [OPEN, IN_PROGRESS, WAITING_CUSTOMER, RESOLVED, CLOSED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        firstResponseAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time }
+        messages:
+          type: array
+          items:
+            type: object
+            required: [id, authorRole, body, at]
+            properties:
+              id: { type: string, format: uuid }
+              authorRole: { type: string, enum: [BUYER, SUPPORT] }
+              body: { type: string }
+              at: { type: string, format: date-time }
+    IssueList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Issue" } }
   responses:
     Error:
       description: Problem details (see code)
