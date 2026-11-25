@@ -33,9 +33,11 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/kyc"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	paymentprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payment"
+	shippingprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/shipping"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/search"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/shipping"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
 
@@ -90,7 +92,13 @@ func main() {
 	}
 	payments := &payment.Service{Pool: pool, Q: authSvc.Q, Log: log,
 		Provider: paymentprovider.NewSim(cfg.SimPayURL, cfg.SimPayAPIKey, []byte(cfg.SimPayWebhookSecret))}
-	checkouts := &checkout.Service{Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log}
+	if cfg.ProviderShipping != "sim" {
+		log.Error("shipping", "err", "only PROVIDER_SHIPPING=sim exists in this build (paid aggregators: paid-later/)")
+		os.Exit(1)
+	}
+	shipments := &shipping.Service{Pool: pool, Q: authSvc.Q, Log: log,
+		Provider: shippingprovider.NewSim(cfg.SimShipURL, cfg.SimShipAPIKey, []byte(cfg.SimShipWebhookSecret))}
+	checkouts := &checkout.Service{Shipping: shipments, Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log}
 	payments.Hooks = map[string]payment.Hook{"ORDER": checkouts.OnPayment}
 	products := &product.Service{Pool: pool, Q: authSvc.Q, Store: media, Limiter: limiter, Log: log}
 	sellers := &seller.Service{
@@ -112,6 +120,7 @@ func main() {
 		Cart:           &cart.Handler{Svc: carts, Limiter: limiter, Secure: cfg.CookieSecure},
 		Payment:        &payment.Handler{Svc: payments},
 		Checkout:       &checkout.Handler{Svc: checkouts},
+		Shipping:       &shipping.Handler{Svc: shipments},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,

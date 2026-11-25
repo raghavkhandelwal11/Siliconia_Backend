@@ -28,6 +28,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/outbox"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/shipping"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
 
@@ -43,14 +44,21 @@ var (
 	ErrQuoteChanged  = httpx.NewError(http.StatusConflict, "QUOTE_CHANGED", "Prices or stock changed. Review your order again")
 	ErrStockChanged  = httpx.NewError(http.StatusConflict, "STOCK_INSUFFICIENT", "Someone just bought the last units of an item. Review your order again")
 	ErrCODNotAllowed = httpx.NewError(http.StatusUnprocessableEntity, "COD_NOT_ALLOWED", "Cash on delivery is not available for this order")
+	ErrNoDelivery    = httpx.NewError(http.StatusConflict, "NOT_SERVICEABLE", "We don't deliver to this PIN code yet. Choose another address")
 	ErrPhoneRequired = httpx.NewError(http.StatusUnprocessableEntity, "PHONE_REQUIRED", "Verify your mobile number before placing an order")
 	ErrIdemConflict  = httpx.NewError(http.StatusUnprocessableEntity, "IDEMPOTENCY_CONFLICT", "This request key was already used for a different order")
 	ErrIdemPending   = httpx.NewError(http.StatusConflict, "IN_PROGRESS", "This order is still being placed")
 	ErrNotPending    = httpx.NewError(http.StatusConflict, "NOT_AWAITING_PAYMENT", "This order is not waiting for payment")
 )
 
+// PinChecker answers PIN serviceability (the shipping module).
+type PinChecker interface {
+	Check(ctx context.Context, pin string) shipping.Serviceability
+}
+
 // Service runs checkout.
 type Service struct {
+	Shipping  PinChecker // nil: every PIN is served with COD (unit tests)
 	Pool      *pgxpool.Pool
 	Q         *store.Queries
 	Payments  *payment.Service
@@ -77,6 +85,20 @@ func (s *Service) rules(ctx context.Context, q *store.Queries) Rules {
 		}
 	}
 	return r
+}
+
+func (s *Service) pin(ctx context.Context, pin string) shipping.Serviceability {
+	if s.Shipping == nil {
+		return shipping.Serviceability{Pincode: pin, Deliverable: true, COD: true, ETADays: 4, Known: true}
+	}
+	return s.Shipping.Check(ctx, pin)
+}
+
+// Delivery is the delivery estimate for the chosen address.
+type Delivery struct {
+	Deliverable bool       `json:"deliverable"`
+	ETADays     int        `json:"etaDays,omitempty"`
+	EstimatedBy *time.Time `json:"estimatedBy,omitempty"`
 }
 
 // QuoteLine is one product at checkout.
@@ -111,6 +133,8 @@ type Quote struct {
 	PayablePaise       int64        `json:"payablePaise"`
 	CODEligible        bool         `json:"codEligible"`
 	CODLimitPaise      int64        `json:"codLimitPaise"`
+	CODReason          string       `json:"codReason,omitempty"` // OVER_LIMIT, PIN_NO_COD
+	Delivery           *Delivery    `json:"delivery,omitempty"`
 	ElectronsNonMember int64        `json:"electronsNonMember"`
 	ElectronsMember    int64        `json:"electronsMember"`
 	QuoteHash          string       `json:"quoteHash"`
@@ -126,6 +150,11 @@ type built struct {
 // build prices the cart lines. Shipping is free in the prototype (the BRD
 // sets no delivery fee); serviceability arrives with sim-ship (T2.4).
 func (s *Service) build(ctx context.Context, q *store.Queries, rows []store.CheckoutLinesRow, addr *store.Address, payMethod string, rules Rules) built {
+	var sv *shipping.Serviceability
+	if addr != nil {
+		v := s.pin(ctx, addr.Pincode)
+		sv = &v
+	}
 	out := Quote{Groups: []QuoteGroup{}, CODLimitPaise: rules.CODMaxPaise}
 	ok := len(rows) > 0
 	h := sha256.New()
@@ -163,6 +192,25 @@ func (s *Service) build(ctx context.Context, q *store.Queries, rows []store.Chec
 	out.SavingsPaise = out.MrpTotalPaise - out.ItemTotalPaise
 	out.PayablePaise = out.ItemTotalPaise + out.ShippingPaise
 	out.CODEligible = out.PayablePaise > 0 && out.PayablePaise <= rules.CODMaxPaise
+	if !out.CODEligible {
+		out.CODReason = "OVER_LIMIT"
+	}
+	deliverable := true
+	if sv != nil && sv.Known {
+		d := &Delivery{Deliverable: sv.Deliverable}
+		if sv.Deliverable {
+			d.ETADays = sv.ETADays
+			by := time.Now().In(ist).AddDate(0, 0, sv.ETADays)
+			d.EstimatedBy = &by
+		}
+		out.Delivery, deliverable = d, sv.Deliverable
+		if out.CODEligible && !sv.COD {
+			out.CODEligible, out.CODReason = false, "PIN_NO_COD"
+		}
+	} else if sv != nil && out.CODEligible {
+		// The courier service did not answer: no promise of cash on delivery.
+		out.CODEligible, out.CODReason = false, "PIN_NO_COD"
+	}
 	out.ElectronsNonMember = rules.Electrons.Earn(out.ItemTotalPaise, false)
 	out.ElectronsMember = rules.Electrons.Earn(out.ItemTotalPaise, true)
 	if addr != nil {
@@ -172,7 +220,7 @@ func (s *Service) build(ctx context.Context, q *store.Queries, rows []store.Chec
 	}
 	h.Write([]byte(payMethod))
 	out.QuoteHash = hex.EncodeToString(h.Sum(nil))[:24]
-	out.CanPlace = ok && addr != nil && (payMethod != PayCOD || out.CODEligible)
+	out.CanPlace = ok && addr != nil && deliverable && (payMethod != PayCOD || out.CODEligible)
 	return built{quote: out, rows: rows}
 }
 
@@ -308,6 +356,8 @@ func (s *Service) Place(ctx context.Context, b Buyer, key string, in PlaceInput)
 		rules := s.rules(ctx, q)
 		bq := s.build(ctx, q, rows, &addr, method, rules)
 		switch {
+		case bq.quote.Delivery != nil && !bq.quote.Delivery.Deliverable:
+			return ErrNoDelivery
 		case !bq.quote.CanPlace && method == PayCOD && !bq.quote.CODEligible:
 			return ErrCODNotAllowed
 		case !bq.quote.CanPlace:
@@ -509,6 +559,8 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 	return n, err
 }
 
+var ist = time.FixedZone("IST", 19800)
+
 // orderNumber is short and readable: SX-261126-K7Q2M (no 0/O/1/I).
 func orderNumber(t time.Time) string {
 	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -517,7 +569,7 @@ func orderNumber(t time.Time) string {
 		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(alphabet))))
 		b[i] = alphabet[n.Int64()]
 	}
-	return "SX-" + t.In(time.FixedZone("IST", 19800)).Format("060102") + "-" + string(b)
+	return "SX-" + t.In(ist).Format("060102") + "-" + string(b)
 }
 
 func ptr32(n int32) *int32 { return &n }
@@ -536,11 +588,30 @@ type ItemView struct {
 
 // SubOrderView is one seller's part of the order.
 type SubOrderView struct {
-	ID            uuid.UUID  `json:"id"`
-	StoreName     string     `json:"storeName"`
-	Status        string     `json:"status"`
-	SubtotalPaise int64      `json:"subtotalPaise"`
-	Items         []ItemView `json:"items"`
+	ID                 uuid.UUID     `json:"id"`
+	StoreName          string        `json:"storeName"`
+	Status             string        `json:"status"`
+	SubtotalPaise      int64         `json:"subtotalPaise"`
+	Items              []ItemView    `json:"items"`
+	DeliveredAt        *time.Time    `json:"deliveredAt,omitempty"`
+	ReturnWindowEndsAt *time.Time    `json:"returnWindowEndsAt,omitempty"`
+	Shipment           *ShipmentView `json:"shipment,omitempty"`
+}
+
+// ShipmentView is the forward shipment with its tracking scans.
+type ShipmentView struct {
+	AWB     string          `json:"awb"`
+	Courier string          `json:"courier"`
+	Status  string          `json:"status"`
+	ETA     *time.Time      `json:"eta,omitempty"`
+	Events  []TrackingEvent `json:"events"`
+}
+
+// TrackingEvent is one courier scan.
+type TrackingEvent struct {
+	Status   string    `json:"status"`
+	Location string    `json:"location"`
+	At       time.Time `json:"at"`
 }
 
 // PaymentView is the payment state shown on the order.
@@ -587,8 +658,29 @@ func (s *Service) Order(ctx context.Context, buyer, id uuid.UUID) (OrderView, er
 	if err != nil {
 		return OrderView{}, err
 	}
+	shipments, err := s.Q.ListOrderShipments(ctx, id)
+	if err != nil {
+		return OrderView{}, err
+	}
+	tracking, err := s.Q.ListOrderTracking(ctx, id)
+	if err != nil {
+		return OrderView{}, err
+	}
 	for _, sub := range subs {
-		sv := SubOrderView{ID: sub.ID, StoreName: sub.StoreName, Status: string(sub.Status), SubtotalPaise: sub.SubtotalPaise, Items: []ItemView{}}
+		sv := SubOrderView{ID: sub.ID, StoreName: sub.StoreName, Status: string(sub.Status), SubtotalPaise: sub.SubtotalPaise, Items: []ItemView{},
+			DeliveredAt: sub.DeliveredAt, ReturnWindowEndsAt: sub.ReturnWindowEndsAt}
+		for _, sh := range shipments {
+			if sh.SubOrderID != sub.ID || sh.Kind != "FORWARD" || sh.Status == "CANCELLED" {
+				continue
+			}
+			view := &ShipmentView{AWB: sh.Awb, Courier: sh.Provider, Status: sh.Status, ETA: sh.Eta, Events: []TrackingEvent{}}
+			for _, t := range tracking {
+				if t.ShipmentID == sh.ID {
+					view.Events = append(view.Events, TrackingEvent{Status: t.Status, Location: t.Location, At: t.At})
+				}
+			}
+			sv.Shipment = view
+		}
 		for _, it := range items {
 			if it.SubOrderID != sub.ID {
 				continue

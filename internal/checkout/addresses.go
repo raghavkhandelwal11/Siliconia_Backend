@@ -43,6 +43,9 @@ type AddressInput struct {
 	IsDefault bool   `json:"isDefault"`
 }
 
+// ErrPinNotServed means no courier delivers to the PIN code.
+var ErrPinNotServed = httpx.NewError(http.StatusUnprocessableEntity, "PIN_NOT_SERVICEABLE", "We don't deliver to this PIN code yet")
+
 var (
 	phoneRE   = regexp.MustCompile(`^[6-9][0-9]{9}$`)
 	pincodeRE = regexp.MustCompile(`^[1-9][0-9]{5}$`)
@@ -91,6 +94,11 @@ func (s *Service) Addresses(ctx context.Context, buyer uuid.UUID) ([]Address, er
 func (s *Service) SaveAddress(ctx context.Context, buyer uuid.UUID, id *uuid.UUID, in AddressInput) (Address, error) {
 	if err := in.clean(); err != nil {
 		return Address{}, err
+	}
+	// LLD 7: the PIN is checked against courier serviceability. When the
+	// courier service does not answer, the address is still saved.
+	if sv := s.pin(ctx, in.Pincode); sv.Known && !sv.Deliverable {
+		return Address{}, ErrPinNotServed
 	}
 	var out store.Address
 	err := db.InTx(ctx, s.Pool, func(tx pgx.Tx) error {

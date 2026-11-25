@@ -329,7 +329,7 @@ func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams
 
 const createSubOrder = `-- name: CreateSubOrder :one
 INSERT INTO sub_orders (id, order_id, seller_id, status, subtotal_paise) VALUES ($1, $2, $3, $4, $5)
-RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version
+RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise
 `
 
 type CreateSubOrderParams struct {
@@ -360,6 +360,7 @@ func (q *Queries) CreateSubOrder(ctx context.Context, arg CreateSubOrderParams) 
 		&i.ReturnWindowEndsAt,
 		&i.SettledAt,
 		&i.Version,
+		&i.CodCollectedPaise,
 	)
 	return i, err
 }
@@ -714,7 +715,7 @@ func (q *Queries) ListOrders(ctx context.Context, buyerID uuid.UUID) ([]ListOrde
 }
 
 const listSubOrders = `-- name: ListSubOrders :many
-SELECT s.id, s.order_id, s.seller_id, s.status, s.subtotal_paise, s.invoice_no, s.delivered_at, s.return_window_ends_at, s.settled_at, s.version, sp.store_name FROM sub_orders s JOIN seller_profiles sp ON sp.account_id = s.seller_id
+SELECT s.id, s.order_id, s.seller_id, s.status, s.subtotal_paise, s.invoice_no, s.delivered_at, s.return_window_ends_at, s.settled_at, s.version, s.cod_collected_paise, sp.store_name FROM sub_orders s JOIN seller_profiles sp ON sp.account_id = s.seller_id
 WHERE s.order_id = $1 ORDER BY sp.store_name
 `
 
@@ -729,6 +730,7 @@ type ListSubOrdersRow struct {
 	ReturnWindowEndsAt *time.Time `json:"returnWindowEndsAt"`
 	SettledAt          *time.Time `json:"settledAt"`
 	Version            int32      `json:"version"`
+	CodCollectedPaise  int64      `json:"codCollectedPaise"`
 	StoreName          string     `json:"storeName"`
 }
 
@@ -752,6 +754,7 @@ func (q *Queries) ListSubOrders(ctx context.Context, orderID uuid.UUID) ([]ListS
 			&i.ReturnWindowEndsAt,
 			&i.SettledAt,
 			&i.Version,
+			&i.CodCollectedPaise,
 			&i.StoreName,
 		); err != nil {
 			return nil, err

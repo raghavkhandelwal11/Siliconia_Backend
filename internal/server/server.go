@@ -20,6 +20,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/search"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/shipping"
 )
 
 // Deps are the shared dependencies modules need. Modules add their routes in
@@ -41,6 +42,7 @@ type Deps struct {
 	Cart        *cart.Handler
 	Payment     *payment.Handler
 	Checkout    *checkout.Handler
+	Shipping    *shipping.Handler
 }
 
 // New returns the root handler.
@@ -70,6 +72,9 @@ func New(d Deps) http.Handler {
 		if d.Payment != nil {
 			d.Payment.Routes(api) // signed webhooks: no session, no CSRF
 		}
+		if d.Shipping != nil {
+			d.Shipping.PublicRoutes(api)
+		}
 		if d.PDP != nil {
 			d.PDP.PublicRoutes(api)
 			// The live block works for everyone and reads the session when there is one.
@@ -95,6 +100,9 @@ func New(d Deps) http.Handler {
 				}
 				if d.Checkout != nil {
 					d.Checkout.Routes(api)
+				}
+				if d.Shipping != nil {
+					d.Shipping.Routes(api)
 				}
 
 			})
