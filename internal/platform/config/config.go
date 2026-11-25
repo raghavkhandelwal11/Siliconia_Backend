@@ -43,6 +43,11 @@ type Config struct {
 	ProviderKYC      string
 	SimKYCURL        string
 
+	ProviderPayment     string
+	SimPayURL           string
+	SimPayAPIKey        string
+	SimPayWebhookSecret string
+
 	// S3-compatible object storage: SeaweedFS (local, VM) or Cloudflare R2.
 	StorageEndpoint    string
 	StorageAccessKey   string
@@ -83,6 +88,10 @@ func Load() (Config, error) {
 		SimNotifyURL:            env("SIM_NOTIFY_URL", "http://localhost:9005"),
 		ProviderKYC:             env("PROVIDER_KYC", "sim"),
 		SimKYCURL:               env("SIM_KYC_URL", "http://localhost:9004"),
+		ProviderPayment:         env("PROVIDER_PAYMENT", "sim"),
+		SimPayURL:               env("SIM_PAY_URL", "http://localhost:9001"),
+		SimPayAPIKey:            os.Getenv("SIM_PAY_API_KEY"),
+		SimPayWebhookSecret:     os.Getenv("SIM_PAY_WEBHOOK_SECRET"),
 		StorageEndpoint:         env("STORAGE_ENDPOINT", "localhost:8333"),
 		StorageAccessKey:        os.Getenv("STORAGE_ACCESS_KEY"),
 		StorageSecretKey:        os.Getenv("STORAGE_SECRET_KEY"),
@@ -108,6 +117,8 @@ func Load() (Config, error) {
 		c.EncryptionMasterKey = orDefault(c.EncryptionMasterKey, DevKey("encryption-master"))
 		c.StorageAccessKey = orDefault(c.StorageAccessKey, "siliconics-local")
 		c.StorageSecretKey = orDefault(c.StorageSecretKey, DevKey("storage")[:32])
+		c.SimPayAPIKey = orDefault(c.SimPayAPIKey, DevKey("sim-pay-api")[:32])
+		c.SimPayWebhookSecret = orDefault(c.SimPayWebhookSecret, DevKey("sim-pay-webhook")[:32])
 	}
 	return c, c.validate()
 }
@@ -123,7 +134,7 @@ func (c Config) validate() error {
 	case ModeLocal, ModeCI, ModePrototype:
 	case ModeProduction:
 		// Production is planned in paid-later/ and is not part of this build.
-		for name, v := range map[string]string{"PROVIDER_SMS": c.ProviderSMS, "PROVIDER_WHATSAPP": c.ProviderWhatsApp, "PROVIDER_KYC": c.ProviderKYC} {
+		for name, v := range map[string]string{"PROVIDER_SMS": c.ProviderSMS, "PROVIDER_WHATSAPP": c.ProviderWhatsApp, "PROVIDER_KYC": c.ProviderKYC, "PROVIDER_PAYMENT": c.ProviderPayment} {
 			if v == "sim" {
 				return fmt.Errorf("config: %s=sim is not allowed in production mode", name)
 			}

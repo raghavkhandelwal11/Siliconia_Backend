@@ -147,6 +147,52 @@ func (ns NullLotKind) Value() (driver.Value, error) {
 	return string(ns.LotKind), nil
 }
 
+type PayMethod string
+
+const (
+	PayMethodUPI        PayMethod = "UPI"
+	PayMethodCARD       PayMethod = "CARD"
+	PayMethodNETBANKING PayMethod = "NETBANKING"
+	PayMethodCOD        PayMethod = "COD"
+	PayMethodELECTRONS  PayMethod = "ELECTRONS"
+	PayMethodMANDATE    PayMethod = "MANDATE"
+)
+
+func (e *PayMethod) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PayMethod(s)
+	case string:
+		*e = PayMethod(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PayMethod: %T", src)
+	}
+	return nil
+}
+
+type NullPayMethod struct {
+	PayMethod PayMethod `json:"payMethod"`
+	Valid     bool      `json:"valid"` // Valid is true if PayMethod is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPayMethod) Scan(value interface{}) error {
+	if value == nil {
+		ns.PayMethod, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PayMethod.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPayMethod) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PayMethod), nil
+}
+
 type Account struct {
 	ID              uuid.UUID      `json:"id"`
 	Role            AccountRole    `json:"role"`
@@ -284,6 +330,24 @@ type Outbox struct {
 	PublishedAt *time.Time `json:"publishedAt"`
 }
 
+type Payment struct {
+	ID                uuid.UUID     `json:"id"`
+	Purpose           string        `json:"purpose"`
+	Ref               string        `json:"ref"`
+	AccountID         *uuid.UUID    `json:"accountId"`
+	Provider          string        `json:"provider"`
+	ProviderOrderID   *string       `json:"providerOrderId"`
+	ProviderPaymentID *string       `json:"providerPaymentId"`
+	Method            NullPayMethod `json:"method"`
+	AmountPaise       int64         `json:"amountPaise"`
+	Status            string        `json:"status"`
+	FailureCode       *string       `json:"failureCode"`
+	MandateID         *string       `json:"mandateId"`
+	CapturedAt        *time.Time    `json:"capturedAt"`
+	CreatedAt         time.Time     `json:"createdAt"`
+	UpdatedAt         time.Time     `json:"updatedAt"`
+}
+
 type ProcessedEvent struct {
 	Consumer    string    `json:"consumer"`
 	EventID     uuid.UUID `json:"eventId"`
@@ -319,6 +383,19 @@ type ProductImage struct {
 	UploadID  uuid.UUID `json:"uploadId"`
 	Position  int32     `json:"position"`
 	Alt       string    `json:"alt"`
+}
+
+type Refund struct {
+	ID               uuid.UUID `json:"id"`
+	PaymentID        uuid.UUID `json:"paymentId"`
+	Ref              string    `json:"ref"`
+	AmountPaise      int64     `json:"amountPaise"`
+	Electrons        int32     `json:"electrons"`
+	Status           string    `json:"status"`
+	ProviderRefundID *string   `json:"providerRefundId"`
+	Reason           *string   `json:"reason"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 type SellerProfile struct {

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -1135,6 +1135,35 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /webhooks/payment:
+    post:
+      operationId: paymentWebhook
+      summary: Payment provider events (sim-pay), signed with X-Sim-Signature
+      description: |
+        `X-Sim-Signature: t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + body)>`, rejected beyond 5 minutes.
+        Events are de-duplicated on their id and applied in the same transaction; 200 means stored and applied.
+        Types: payment.captured, payment.failed, refund.processed, refund.failed, mandate.active, mandate.failed, mandate.revoked.
+      tags: [payments]
+      security: []
+      parameters:
+        - { name: X-Sim-Signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, type, data]
+              properties:
+                id: { type: string }
+                type: { type: string }
+                created: { type: integer }
+                data: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: Applied (or already applied) }
+        "400": { description: Bad signature or malformed event }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { description: Not applied; the provider retries }
 components:
   securitySchemes:
     sessionCookie:
