@@ -30,7 +30,7 @@ func (q *Queries) DecideSellerApplication(ctx context.Context, arg DecideSellerA
 const ensureSellerProfile = `-- name: EnsureSellerProfile :one
 INSERT INTO seller_profiles (account_id) VALUES ($1)
 ON CONFLICT (account_id) DO UPDATE SET account_id = EXCLUDED.account_id
-RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version
+RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version, invoice_counter
 `
 
 func (q *Queries) EnsureSellerProfile(ctx context.Context, accountID uuid.UUID) (SellerProfile, error) {
@@ -61,12 +61,13 @@ func (q *Queries) EnsureSellerProfile(ctx context.Context, accountID uuid.UUID) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.InvoiceCounter,
 	)
 	return i, err
 }
 
 const getSellerProfile = `-- name: GetSellerProfile :one
-SELECT account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version FROM seller_profiles WHERE account_id = $1
+SELECT account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version, invoice_counter FROM seller_profiles WHERE account_id = $1
 `
 
 func (q *Queries) GetSellerProfile(ctx context.Context, accountID uuid.UUID) (SellerProfile, error) {
@@ -97,6 +98,7 @@ func (q *Queries) GetSellerProfile(ctx context.Context, accountID uuid.UUID) (Se
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.InvoiceCounter,
 	)
 	return i, err
 }
@@ -285,7 +287,7 @@ UPDATE seller_profiles
 SET bank_enc = $2, bank_last4 = $3, ifsc = $4, account_holder = $5, bank_verified_at = $6,
     updated_at = now(), version = version + 1
 WHERE account_id = $1
-RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version
+RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version, invoice_counter
 `
 
 type SetSellerBankParams struct {
@@ -332,6 +334,7 @@ func (q *Queries) SetSellerBank(ctx context.Context, arg SetSellerBankParams) (S
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.InvoiceCounter,
 	)
 	return i, err
 }
@@ -340,7 +343,7 @@ const setSellerPAN = `-- name: SetSellerPAN :one
 UPDATE seller_profiles
 SET pan_enc = $2, pan_last4 = $3, pan_verified_at = $4, updated_at = now(), version = version + 1
 WHERE account_id = $1
-RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version
+RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version, invoice_counter
 `
 
 type SetSellerPANParams struct {
@@ -383,6 +386,7 @@ func (q *Queries) SetSellerPAN(ctx context.Context, arg SetSellerPANParams) (Sel
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.InvoiceCounter,
 	)
 	return i, err
 }
@@ -391,7 +395,7 @@ const submitSellerApplication = `-- name: SubmitSellerApplication :one
 UPDATE seller_profiles
 SET terms_version = $2, terms_accepted_at = now(), submitted_at = now(), updated_at = now(), version = version + 1
 WHERE account_id = $1
-RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version
+RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version, invoice_counter
 `
 
 type SubmitSellerApplicationParams struct {
@@ -427,6 +431,7 @@ func (q *Queries) SubmitSellerApplication(ctx context.Context, arg SubmitSellerA
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.InvoiceCounter,
 	)
 	return i, err
 }
@@ -439,7 +444,7 @@ SET business_type = $2, legal_name = $3, store_name = $4, gstin = $5, pickup_add
     bank_verified_at = CASE WHEN legal_name = $3 THEN bank_verified_at END,
     updated_at = now(), version = version + 1
 WHERE account_id = $1
-RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version
+RETURNING account_id, business_type, legal_name, store_name, pan_enc, pan_last4, pan_verified_at, gstin, bank_enc, bank_last4, ifsc, account_holder, bank_verified_at, pickup_address, terms_version, terms_accepted_at, submitted_at, decided_at, decided_by, is_platform, verified_tag, created_at, updated_at, version, invoice_counter
 `
 
 type UpdateSellerBusinessParams struct {
@@ -486,6 +491,7 @@ func (q *Queries) UpdateSellerBusiness(ctx context.Context, arg UpdateSellerBusi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.InvoiceCounter,
 	)
 	return i, err
 }

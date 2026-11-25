@@ -380,6 +380,9 @@ func (s *Service) Place(ctx context.Context, b Buyer, key string, in PlaceInput)
 		if method == PayCOD {
 			status, subStatus, confirmed = "CONFIRMED", store.SubStatusCONFIRMED, &now
 		}
+		if err := q.SetActor(ctx, store.SetActorParams{Actor: "BUYER", Note: ""}); err != nil {
+			return err
+		}
 		addrJSON, _ := json.Marshal(addressView(addr))
 		rulesJSON, _ := json.Marshal(rules)
 		order, err := q.CreateOrder(ctx, store.CreateOrderParams{
@@ -492,6 +495,9 @@ func (s *Service) OnPayment(ctx context.Context, tx pgx.Tx, q *store.Queries, p 
 	}
 	switch o.Status {
 	case "PENDING_PAYMENT":
+		if err := q.SetActor(ctx, store.SetActorParams{Actor: "SYSTEM", Note: "Payment received"}); err != nil {
+			return nil, err
+		}
 		if err := q.ConfirmOrder(ctx, o.ID); err != nil {
 			return nil, err
 		}
@@ -527,6 +533,9 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 		q := s.Q.WithTx(tx)
 		ids, err := q.DueForExpiry(ctx)
 		if err != nil {
+			return err
+		}
+		if err := q.SetActor(ctx, store.SetActorParams{Actor: "SYSTEM", Note: "Payment not completed in time"}); err != nil {
 			return err
 		}
 		for _, id := range ids {
@@ -576,6 +585,8 @@ func ptr32(n int32) *int32 { return &n }
 
 // ItemView is an order line from the snapshot.
 type ItemView struct {
+	ID             uuid.UUID         `json:"id"`
+	Status         string            `json:"status"`
 	Name           string            `json:"name"`
 	Slug           string            `json:"slug"`
 	CoverURL       string            `json:"coverUrl,omitempty"`
@@ -596,6 +607,19 @@ type SubOrderView struct {
 	DeliveredAt        *time.Time    `json:"deliveredAt,omitempty"`
 	ReturnWindowEndsAt *time.Time    `json:"returnWindowEndsAt,omitempty"`
 	Shipment           *ShipmentView `json:"shipment,omitempty"`
+	Events             []Event       `json:"events"`
+	CancelReason       string        `json:"cancelReason,omitempty"`
+	CancelledBy        string        `json:"cancelledBy,omitempty"`
+	CanCancel          bool          `json:"canCancel"`
+	HasInvoice         bool          `json:"hasInvoice"`
+}
+
+// Event is one step in a sub-order's history (the buyer timeline).
+type Event struct {
+	Status string    `json:"status"`
+	Actor  string    `json:"actor"`
+	Note   string    `json:"note,omitempty"`
+	At     time.Time `json:"at"`
 }
 
 // ShipmentView is the forward shipment with its tracking scans.
@@ -666,9 +690,31 @@ func (s *Service) Order(ctx context.Context, buyer, id uuid.UUID) (OrderView, er
 	if err != nil {
 		return OrderView{}, err
 	}
+	events, err := s.Q.ListSubOrderEvents(ctx, id)
+	if err != nil {
+		return OrderView{}, err
+	}
 	for _, sub := range subs {
 		sv := SubOrderView{ID: sub.ID, StoreName: sub.StoreName, Status: string(sub.Status), SubtotalPaise: sub.SubtotalPaise, Items: []ItemView{},
-			DeliveredAt: sub.DeliveredAt, ReturnWindowEndsAt: sub.ReturnWindowEndsAt}
+			DeliveredAt: sub.DeliveredAt, ReturnWindowEndsAt: sub.ReturnWindowEndsAt, Events: []Event{},
+			CanCancel:  sub.Status == store.SubStatusCONFIRMED || sub.Status == store.SubStatusPACKED,
+			HasInvoice: sub.Status == store.SubStatusSHIPPED || sub.Status == store.SubStatusOUTFORDELIVERY || sub.Status == store.SubStatusDELIVERED || sub.Status == store.SubStatusRTO}
+		if sub.CancelReason != nil {
+			sv.CancelReason = *sub.CancelReason
+		}
+		if sub.CancelledBy != nil {
+			sv.CancelledBy = *sub.CancelledBy
+		}
+		for _, e := range events {
+			if e.SubOrderID == sub.ID {
+				// The courier's location is shown with its scans; keep notes for people.
+				note := e.Note
+				if e.Actor == "COURIER" {
+					note = ""
+				}
+				sv.Events = append(sv.Events, Event{Status: string(e.Status), Actor: e.Actor, Note: note, At: e.At})
+			}
+		}
 		for _, sh := range shipments {
 			if sh.SubOrderID != sub.ID || sh.Kind != "FORWARD" || sh.Status == "CANCELLED" {
 				continue
@@ -685,7 +731,7 @@ func (s *Service) Order(ctx context.Context, buyer, id uuid.UUID) (OrderView, er
 			if it.SubOrderID != sub.ID {
 				continue
 			}
-			iv := ItemView{Name: it.ProductName, Slug: it.ProductSlug, Qty: it.Qty, UnitPricePaise: it.UnitPricePaise, UnitMrpPaise: it.UnitMrpPaise,
+			iv := ItemView{ID: it.ID, Status: it.Status, Name: it.ProductName, Slug: it.ProductSlug, Qty: it.Qty, UnitPricePaise: it.UnitPricePaise, UnitMrpPaise: it.UnitMrpPaise,
 				LineTotalPaise: it.LineTotalPaise, Attrs: map[string]string{}}
 			_ = json.Unmarshal(it.VariantAttrs, &iv.Attrs)
 			if it.CoverKey != "" {

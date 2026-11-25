@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -1396,6 +1396,96 @@ paths:
         "200": { description: Applied (or already applied) }
         "400": { description: Bad signature or malformed event }
         "500": { description: Not applied; the courier retries }
+  /seller/orders:
+    get:
+      operationId: sellerOrders
+      summary: The seller's sub-orders, newest first, with counts per status (UI-SEL-05)
+      tags: [orders]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [CONFIRMED, PACKED, SHIPPED, OUT_FOR_DELIVERY, DELIVERED, CANCELLED, RTO] } }
+      responses:
+        "200":
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, counts]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/SellerOrder" } }
+                  counts: { type: object, additionalProperties: { type: integer } }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /seller/orders/{id}:
+    get:
+      operationId: sellerOrder
+      summary: One sub-order with address, items, history and allowed actions
+      tags: [orders]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The sub-order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SellerOrderDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+  /seller/sub-orders/{id}/pack:
+    post:
+      operationId: packSubOrder
+      summary: Mark a new sub-order as packed (CONFIRMED → PACKED)
+      tags: [orders]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Packed }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /seller/sub-orders/{id}/cancel:
+    post:
+      operationId: sellerCancelSubOrder
+      summary: Seller cancels before shipping; stock returns and prepaid orders are refunded
+      tags: [orders]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { $ref: "#/components/requestBodies/CancelReason" }
+      responses:
+        "204": { description: Cancelled }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /sub-orders/{id}/cancel:
+    post:
+      operationId: cancelSubOrder
+      summary: Buyer cancels one seller's part of an order before it ships
+      tags: [orders]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody: { $ref: "#/components/requestBodies/CancelReason" }
+      responses:
+        "204": { description: Cancelled; a prepaid sub-order is refunded to the original method }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      summary: GST tax invoice for a shipped sub-order (buyer, seller or admin)
+      description: The number comes from the seller's own series per financial year. Prototype invoices carry a "not a valid tax invoice" banner.
+      tags: [orders]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /webhooks/payment:
     post:
       operationId: paymentWebhook
@@ -1426,6 +1516,16 @@ paths:
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { description: Not applied; the provider retries }
 components:
+  requestBodies:
+    CancelReason:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [reason]
+            properties:
+              reason: { type: string, minLength: 3, maxLength: 200 }
   securitySchemes:
     sessionCookie:
       type: apiKey
@@ -2001,8 +2101,10 @@ components:
         address: { $ref: "#/components/schemas/DeliveryAddress" }
     OrderItem:
       type: object
-      required: [name, slug, attrs, qty, unitPricePaise, unitMrpPaise, lineTotalPaise]
+      required: [id, status, name, slug, attrs, qty, unitPricePaise, unitMrpPaise, lineTotalPaise]
       properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [ACTIVE, CANCELLED, RETURNED, REPLACED] }
         name: { type: string }
         slug: { type: string }
         coverUrl: { type: string }
@@ -2030,7 +2132,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, storeName, status, subtotalPaise, items]
+            required: [id, storeName, status, subtotalPaise, items, events, canCancel, hasInvoice]
             properties:
               id: { type: string, format: uuid }
               storeName: { type: string }
@@ -2039,6 +2141,11 @@ components:
               items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
               deliveredAt: { type: string, format: date-time }
               returnWindowEndsAt: { type: string, format: date-time }
+              events: { type: array, items: { $ref: "#/components/schemas/TimelineEvent" } }
+              cancelReason: { type: string }
+              cancelledBy: { type: string, enum: [BUYER, SELLER, ADMIN] }
+              canCancel: { type: boolean }
+              hasInvoice: { type: boolean }
               shipment:
                 type: object
                 required: [awb, courier, status, events]
@@ -2091,6 +2198,58 @@ components:
         eta: { type: string, format: date-time }
         codAmountPaise: { type: integer, format: int64 }
         courier: { type: string }
+    TimelineEvent:
+      type: object
+      required: [status, actor, at]
+      properties:
+        status: { type: string }
+        actor: { type: string, enum: [BUYER, SELLER, ADMIN, COURIER, SYSTEM] }
+        note: { type: string }
+        at: { type: string, format: date-time }
+    SellerOrder:
+      type: object
+      required: [id, orderNumber, status, placedAt, payMethod, subtotalPaise, itemCount, buyerName, city, pincode]
+      properties:
+        id: { type: string, format: uuid }
+        orderNumber: { type: string }
+        status: { type: string }
+        placedAt: { type: string, format: date-time }
+        payMethod: { type: string }
+        subtotalPaise: { type: integer, format: int64 }
+        itemCount: { type: integer }
+        buyerName: { type: string }
+        city: { type: string }
+        pincode: { type: string }
+        awb: { type: string }
+        shipmentStatus: { type: string }
+        invoiceNo: { type: string }
+        deliveredAt: { type: string, format: date-time }
+    SellerOrderDetail:
+      allOf:
+        - $ref: "#/components/schemas/SellerOrder"
+        - type: object
+          required: [address, items, events, canPack, canShip, canCancel]
+          properties:
+            address: { $ref: "#/components/schemas/DeliveryAddress" }
+            items:
+              type: array
+              items:
+                type: object
+                required: [id, name, attrs, qty, unitPricePaise, lineTotalPaise, status]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  attrs: { type: object, additionalProperties: { type: string } }
+                  coverUrl: { type: string }
+                  qty: { type: integer }
+                  unitPricePaise: { type: integer, format: int64 }
+                  lineTotalPaise: { type: integer, format: int64 }
+                  status: { type: string }
+            events: { type: array, items: { $ref: "#/components/schemas/TimelineEvent" } }
+            cancelReason: { type: string }
+            canPack: { type: boolean }
+            canShip: { type: boolean }
+            canCancel: { type: boolean }
   responses:
     Error:
       description: Problem details (see code)

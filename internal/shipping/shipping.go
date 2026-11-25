@@ -167,7 +167,11 @@ func (s *Service) Ship(ctx context.Context, seller, subOrderID uuid.UUID, weight
 		if err != nil {
 			return err
 		}
-		if _, err := q.SetSubOrderStatus(ctx, store.SetSubOrderStatusParams{ID: subOrderID, Status: store.SubStatusSHIPPED}); err != nil {
+		if err := q.SetActor(ctx, store.SetActorParams{Actor: "SELLER", Note: "AWB " + sh.Awb}); err != nil {
+			return err
+		}
+		if _, err := q.TransitionSubOrder(ctx, store.TransitionSubOrderParams{ID: subOrderID, ToStatus: store.SubStatusSHIPPED,
+			FromStatus: []string{"CONFIRMED", "PACKED"}}); err != nil {
 			return err
 		}
 		out = view(sh)
@@ -275,6 +279,9 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 	}
 	if so.Status == next || so.Status == store.SubStatusDELIVERED || so.Status == store.SubStatusRTO || so.Status == store.SubStatusCANCELLED {
 		return nil
+	}
+	if err := q.SetActor(ctx, store.SetActorParams{Actor: "COURIER", Note: e.Location}); err != nil {
+		return err
 	}
 	if next == store.SubStatusDELIVERED {
 		days := returnDays(ctx, q)
