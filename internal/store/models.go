@@ -395,6 +395,36 @@ type KycRecord struct {
 	CheckedAt    time.Time `json:"checkedAt"`
 }
 
+type Notification struct {
+	ID        uuid.UUID  `json:"id"`
+	AccountID uuid.UUID  `json:"accountId"`
+	Template  string     `json:"template"`
+	Title     string     `json:"title"`
+	Body      string     `json:"body"`
+	Link      string     `json:"link"`
+	DedupeKey string     `json:"dedupeKey"`
+	ReadAt    *time.Time `json:"readAt"`
+	CreatedAt time.Time  `json:"createdAt"`
+}
+
+type NotificationDelivery struct {
+	NotificationID uuid.UUID `json:"notificationId"`
+	Channel        string    `json:"channel"`
+	Status         string    `json:"status"`
+	ProviderRef    *string   `json:"providerRef"`
+	Error          *string   `json:"error"`
+	Attempts       int32     `json:"attempts"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+type NotificationPref struct {
+	AccountID uuid.UUID `json:"accountId"`
+	Whatsapp  bool      `json:"whatsapp"`
+	Email     bool      `json:"email"`
+	Marketing bool      `json:"marketing"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type Order struct {
 	ID                 uuid.UUID  `json:"id"`
 	Number             string     `json:"number"`

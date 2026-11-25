@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 1.3.0
+  version: 1.4.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -1700,6 +1700,93 @@ paths:
               schema: { $ref: "#/components/schemas/Issue" }
         "400": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /me/notifications:
+    get:
+      operationId: listNotifications
+      summary: In-app notifications, newest first (30 per page), and the unread count
+      tags: [notifications]
+      parameters:
+        - { name: before, in: query, schema: { type: string, format: date-time }, description: Page backwards from this time }
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, unread]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Notification" } }
+                  unread: { type: integer }
+        "401": { $ref: "#/components/responses/Error" }
+  /me/notifications/read:
+    post:
+      operationId: markNotificationsRead
+      summary: Mark notifications read (an empty list marks all)
+      tags: [notifications]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, maxItems: 100, items: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Unread count after the change
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [unread]
+                properties:
+                  unread: { type: integer }
+  /me/notifications/stream:
+    get:
+      operationId: streamNotifications
+      summary: Server-sent events for the bell (LLD 13)
+      description: |
+        `event: unread` with `{"unread": n}` first, then `event: notification` with a Notification for each new one,
+        and a comment heartbeat every 25 s. The stream ends after 30 minutes; EventSource reconnects on its own.
+      tags: [notifications]
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Error" }
+  /me/notification-prefs:
+    get:
+      operationId: getNotificationPrefs
+      summary: Channel choices (SMS and in-app are always on for order updates)
+      tags: [notifications]
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPrefs" }
+    put:
+      operationId: saveNotificationPrefs
+      summary: Save channel choices
+      tags: [notifications]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationPrefs" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPrefs" }
+        "400": { $ref: "#/components/responses/Error" }
   /webhooks/payment:
     post:
       operationId: paymentWebhook
@@ -2537,6 +2624,24 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Issue" } }
+    Notification:
+      type: object
+      required: [id, template, title, body, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        template: { type: string }
+        title: { type: string }
+        body: { type: string }
+        link: { type: string, description: Path in the web app }
+        readAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    NotificationPrefs:
+      type: object
+      required: [whatsapp, email, marketing]
+      properties:
+        whatsapp: { type: boolean }
+        email: { type: boolean }
+        marketing: { type: boolean, description: Launch alerts and offers (opt-in) }
   responses:
     Error:
       description: Problem details (see code)

@@ -27,6 +27,7 @@ type Message struct {
 	Channel  Channel           `json:"channel"`
 	To       string            `json:"to"`
 	Template string            `json:"template"`
+	Subject  string            `json:"subject,omitempty"` // email only
 	Vars     map[string]string `json:"vars,omitempty"`
 	Body     string            `json:"body"`
 }
@@ -96,15 +97,17 @@ func (r Router) Send(ctx context.Context, m Message) (string, error) {
 	return adapter.Send(ctx, m)
 }
 
-// NewRouter builds the router from adapter names ("sim" or "log"). Brevo is
-// added with the email module (T2.7).
-func NewRouter(sms, whatsapp, email, simNotifyURL string, log *slog.Logger) (Router, error) {
+// NewRouter builds the router from adapter names: "sim" (test inbox), "log",
+// or "brevo" for email (Brevo's free plan; needs brevo settings).
+func NewRouter(sms, whatsapp, email, simNotifyURL string, brevo BrevoConfig, log *slog.Logger) (Router, error) {
 	pick := func(name string) (Messenger, error) {
 		switch name {
 		case "sim":
 			return NewSimNotify(simNotifyURL), nil
 		case "log":
 			return Log{Logger: log}, nil
+		case "brevo":
+			return NewBrevo(brevo)
 		default:
 			return nil, fmt.Errorf("messaging: unknown adapter %q (only free adapters exist in this build)", name)
 		}

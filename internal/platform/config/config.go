@@ -39,6 +39,9 @@ type Config struct {
 	ProviderSMS      string
 	ProviderWhatsApp string
 	ProviderEmail    string
+	BrevoAPIKey      string
+	EmailFrom        string
+	EmailFromName    string
 	SimNotifyURL     string
 	ProviderKYC      string
 	SimKYCURL        string
@@ -89,6 +92,9 @@ func Load() (Config, error) {
 		ProviderSMS:             env("PROVIDER_SMS", "sim"),
 		ProviderWhatsApp:        env("PROVIDER_WHATSAPP", "sim"),
 		ProviderEmail:           env("PROVIDER_EMAIL", "log"),
+		BrevoAPIKey:             os.Getenv("BREVO_API_KEY"),
+		EmailFrom:               os.Getenv("EMAIL_FROM"),
+		EmailFromName:           env("EMAIL_FROM_NAME", "Siliconics"),
 		SimNotifyURL:            env("SIM_NOTIFY_URL", "http://localhost:9005"),
 		ProviderKYC:             env("PROVIDER_KYC", "sim"),
 		SimKYCURL:               env("SIM_KYC_URL", "http://localhost:9004"),
