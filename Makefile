@@ -44,7 +44,8 @@ admin: ## Create an admin (max 3): make admin PHONE=9876543210 NAME="Asha"
 test-integration: ## Integration tests against the Compose PostgreSQL (make up first)
 	$(COMPOSE) exec -T postgres psql -U siliconia -tc "SELECT 1 FROM pg_database WHERE datname='siliconia_test'" | grep -q 1 || \
 	  $(COMPOSE) exec -T postgres createdb -U siliconia siliconia_test
-	TEST_DATABASE_URL="$(TEST_DB)" go test -race -count=1 ./...
+	# -p 1: integration packages share one test database.
+	TEST_DATABASE_URL="$(TEST_DB)" go test -race -count=1 -p 1 ./...
 
 .PHONY: generate
 generate: ## Regenerate sqlc code from db/queries

@@ -179,6 +179,18 @@ type IdempotencyKey struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+type KycRecord struct {
+	ID           uuid.UUID `json:"id"`
+	AccountID    uuid.UUID `json:"accountId"`
+	Type         string    `json:"type"`
+	Status       string    `json:"status"`
+	ProviderRef  string    `json:"providerRef"`
+	NameOnRecord *string   `json:"nameOnRecord"`
+	NameMatch    float32   `json:"nameMatch"`
+	Reason       *string   `json:"reason"`
+	CheckedAt    time.Time `json:"checkedAt"`
+}
+
 type OtpChallenge struct {
 	ID         uuid.UUID       `json:"id"`
 	PhoneE164  string          `json:"phoneE164"`
@@ -205,6 +217,33 @@ type ProcessedEvent struct {
 	Consumer    string    `json:"consumer"`
 	EventID     uuid.UUID `json:"eventId"`
 	ProcessedAt time.Time `json:"processedAt"`
+}
+
+type SellerProfile struct {
+	AccountID       uuid.UUID  `json:"accountId"`
+	BusinessType    *string    `json:"businessType"`
+	LegalName       string     `json:"legalName"`
+	StoreName       string     `json:"storeName"`
+	PanEnc          []byte     `json:"panEnc"`
+	PanLast4        *string    `json:"panLast4"`
+	PanVerifiedAt   *time.Time `json:"panVerifiedAt"`
+	Gstin           *string    `json:"gstin"`
+	BankEnc         []byte     `json:"bankEnc"`
+	BankLast4       *string    `json:"bankLast4"`
+	Ifsc            *string    `json:"ifsc"`
+	AccountHolder   *string    `json:"accountHolder"`
+	BankVerifiedAt  *time.Time `json:"bankVerifiedAt"`
+	PickupAddress   []byte     `json:"pickupAddress"`
+	TermsVersion    *string    `json:"termsVersion"`
+	TermsAcceptedAt *time.Time `json:"termsAcceptedAt"`
+	SubmittedAt     *time.Time `json:"submittedAt"`
+	DecidedAt       *time.Time `json:"decidedAt"`
+	DecidedBy       *uuid.UUID `json:"decidedBy"`
+	IsPlatform      bool       `json:"isPlatform"`
+	VerifiedTag     bool       `json:"verifiedTag"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+	Version         int32      `json:"version"`
 }
 
 type Session struct {

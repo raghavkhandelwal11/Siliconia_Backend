@@ -24,7 +24,9 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/logx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/redisx"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/kyc"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
@@ -60,6 +62,14 @@ func main() {
 		log.Error("auth", "err", err)
 		os.Exit(1)
 	}
+	if cfg.ProviderKYC != "sim" {
+		log.Error("kyc", "err", "only PROVIDER_KYC=sim exists in this build (paid adapters: paid-later/)")
+		os.Exit(1)
+	}
+	sellers := &seller.Service{
+		Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL),
+		Limiter: limiter, Messages: authSvc.Messages, Log: log,
+	}
 
 	handler := server.New(server.Deps{
 		Log:            log,
@@ -68,6 +78,7 @@ func main() {
 		AuthService:    authSvc,
 		Auth:           authHandler,
 		Catalogue:      &catalogue.Handler{Q: store.New(pool)},
+		Seller:         &seller.Handler{Svc: sellers},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,
