@@ -51,3 +51,6 @@ RETURNING provider;
 
 -- name: MarkWebhookProcessed :exec
 UPDATE webhook_events SET processed_at = now() WHERE provider = $1 AND event_id = $2;
+
+-- name: GetRefundByProviderID :one
+SELECT * FROM refunds WHERE provider_refund_id = $1;
