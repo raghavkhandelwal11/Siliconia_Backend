@@ -173,7 +173,7 @@ type simShipment struct {
 func (s *Sim) CreateShipment(ctx context.Context, req ShipmentRequest) (Shipment, error) {
 	var out simShipment
 	err := s.call(ctx, http.MethodPost, "/v1/shipments", req, &out)
-	return Shipment{AWB: out.AWB, Status: out.Status, ETA: out.ETA}, err
+	return Shipment(out), err
 }
 
 // Label implements Provider: the label PDF.
