@@ -296,9 +296,9 @@ func actions(role auth.Role, viewer *auth.Claims, sellerID, productID uuid.UUID,
 		}
 		return []Action{{Key: "add_to_cart", Reason: "OTHER_ROLE"}}
 	case auth.RolePromoter:
-		return []Action{{Key: "promote", Reason: "COMING_M4"}}
+		return []Action{{Key: "promote", Enabled: true, Href: "/promoter"}}
 	case auth.RoleCreator:
-		return []Action{{Key: "request_demo", Reason: "COMING_M4"}, {Key: "add_review", Reason: "COMING_M4"}}
+		return []Action{{Key: "request_demo", Enabled: true, Href: "/creator?demo=" + productID.String()}}
 	case auth.RoleAdmin:
 		return []Action{{Key: "hide", Reason: "COMING_M5"}}
 	}
