@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,8 +13,12 @@ import (
 	"github.com/hibiken/asynq"
 
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/electrons"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/launch"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/membership"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/jobs"
@@ -21,6 +26,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/outbox"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/redisx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
+	paymentprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
 
@@ -108,13 +114,35 @@ func main() {
 		}
 		return err
 	})
+	pays := &payment.Service{Pool: pool, Q: q, Log: log,
+		Provider: paymentprovider.NewSim(cfg.SimPayURL, cfg.SimPayAPIKey, []byte(cfg.SimPayWebhookSecret))}
+	launches := &launch.Service{Pool: pool, Q: q, Redis: rdb, Secret: []byte("launch-pass:" + cfg.AuthSigningKey), Log: log}
+	members := &membership.Service{Pool: pool, Q: q, Payments: pays, PublicURL: cfg.PublicBaseURL, Log: log}
+	ledger := &electrons.Service{Pool: pool, Q: q}
+	checkouts.Launches = launches
 	mux.HandleFunc(jobs.TypeExpireOrders, func(ctx context.Context, _ *asynq.Task) error {
 		n, err := checkouts.Sweep(ctx)
 		if n > 0 {
 			log.Info("expired unpaid orders", "count", n)
 		}
+		_, cerr := launches.Sweep(ctx)
+		return errors.Join(err, cerr, members.Sweep(ctx))
+	})
+	mux.HandleFunc(jobs.TypeMatureElectrons, func(ctx context.Context, _ *asynq.Task) error {
+		_, err := ledger.Mature(ctx)
 		return err
 	})
+	mux.HandleFunc(jobs.TypeExpireElectrons, func(ctx context.Context, _ *asynq.Task) error {
+		_, err := ledger.Expire(ctx)
+		return err
+	})
+	mux.HandleFunc(jobs.TypeRenewMemberships, func(ctx context.Context, _ *asynq.Task) error {
+		c, l, err := members.Renew(ctx)
+		log.Info("membership renewals", "charged", c, "lapsed", l)
+		return err
+	})
+	mux.HandleFunc(jobs.TypeLaunchTick, func(ctx context.Context, _ *asynq.Task) error { return launches.Tick(ctx) })
+	mux.HandleFunc(jobs.TypeLaunchAdmit, func(ctx context.Context, _ *asynq.Task) error { return launches.Admit(ctx) })
 
 	srv := asynq.NewServer(redisOpt, asynq.Config{Concurrency: 10, Queues: jobs.Queues})
 	go func() {

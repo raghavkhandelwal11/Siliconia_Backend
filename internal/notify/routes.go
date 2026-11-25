@@ -33,6 +33,10 @@ var templates = map[string]channels{
 	"seller_return_requested": {whatsapp: true, email: true},
 	"issue_update":            {email: true},
 	"approval_result":         {sms: true, email: true},
+	"membership_renewed":      {sms: true, email: true},
+	"membership_predebit":     {sms: true, whatsapp: true, email: true},
+	"membership_lapsed":       {sms: true, email: true},
+	"electrons_available":     {whatsapp: true},
 }
 
 // Notice is one message for one account.
@@ -113,6 +117,8 @@ func route(ctx context.Context, q *store.Queries, topic string, raw []byte) ([]N
 		return issueUpdated(p)
 	case "account.approval_changed":
 		return approvalChanged(p)
+	case "membership.activated", "membership.predebit", "membership.lapsed", "electrons.lot_available":
+		return m3Notice(topic, p)
 	}
 	return nil, nil
 }
@@ -298,6 +304,28 @@ func approvalChanged(p payload) ([]Notice, error) {
 	case "REJECTED":
 		return []Notice{{Account: acc, Template: "approval_result", Title: "Seller application not approved",
 			Body: "Your seller application needs changes. See the reasons and re-apply from the seller dashboard.", Link: "/seller"}}, nil
+	}
+	return nil, nil
+}
+
+func m3Notice(topic string, p payload) ([]Notice, error) {
+	acc, ok := p.id("accountId")
+	if !ok {
+		return nil, nil
+	}
+	switch topic {
+	case "membership.activated":
+		return []Notice{{Account: acc, Template: "membership_renewed", Title: "You're an Electra Member",
+			Body: "Your Electra Membership is active for a year: member prices, 4x Electrons, cash on delivery and launch deals.", Link: "/membership"}}, nil
+	case "membership.predebit":
+		return []Notice{{Account: acc, Template: "membership_predebit", Title: "Membership renews soon",
+			Body: "Your Electra Membership renews in 2 days for " + rupees(p.num("amountPaise")) + ". Turn off auto-renew on the membership page to stop it.", Link: "/membership"}}, nil
+	case "membership.lapsed":
+		return []Notice{{Account: acc, Template: "membership_lapsed", Title: "Membership ended",
+			Body: "Your Electra Membership has ended. Renew any time to get member benefits back.", Link: "/membership"}}, nil
+	case "electrons.lot_available":
+		return []Notice{{Account: acc, Template: "electrons_available", Title: strconv.FormatInt(p.num("amount"), 10) + " Electrons available",
+			Body: strconv.FormatInt(p.num("amount"), 10) + " Electrons are now ready to spend. 1 Electron = ₹1 off your next order.", Link: "/account/electrons"}}, nil
 	}
 	return nil, nil
 }

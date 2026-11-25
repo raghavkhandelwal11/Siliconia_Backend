@@ -175,8 +175,19 @@ type Live struct {
 	Viewer   string        `json:"viewer"` // ANONYMOUS or the effective role
 	IsMember bool          `json:"isMember"`
 	Actions  []Action      `json:"actions"`
+	// Launch is the product's scheduled or live launch deal, if any.
+	Launch *LaunchBanner `json:"launch,omitempty"`
 	// Saved lists the variants in the buyer's wishlist.
 	Saved []uuid.UUID `json:"saved"`
+}
+
+// LaunchBanner points shoppers to a launch deal for the product.
+type LaunchBanner struct {
+	ID             uuid.UUID `json:"id"`
+	Status         string    `json:"status"`
+	StartsAt       time.Time `json:"startsAt"`
+	DealPricePaise int64     `json:"dealPricePaise"`
+	DealRemaining  int32     `json:"dealRemaining"`
 }
 
 // ElectronRules are the earning rules from settings (BRD 4; config table).
@@ -245,6 +256,14 @@ func (s *Service) LiveBlock(ctx context.Context, productID uuid.UUID, viewer *au
 		out.Viewer = string(role)
 	}
 	out.Actions = actions(role, viewer, row.SellerAccount, productID, anyStock)
+	if role == auth.RoleBuyer {
+		if ok, err := s.Q.IsMember(ctx, viewer.Subject); err == nil {
+			out.IsMember = ok
+		}
+	}
+	if l, err := s.Q.ActiveLaunchForProduct(ctx, productID); err == nil {
+		out.Launch = &LaunchBanner{ID: l.ID, Status: string(l.Status), StartsAt: l.StartsAt, DealPricePaise: l.DealPricePaise, DealRemaining: l.DealRemaining}
+	}
 	if role == auth.RoleBuyer && s.Saved != nil {
 		ids := make([]uuid.UUID, len(vars))
 		for i, v := range vars {

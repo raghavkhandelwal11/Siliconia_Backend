@@ -33,6 +33,10 @@ const (
 	TopicMandateRevoked = "mandate.revoked"
 )
 
+// ErrNotYetKnown means a webhook arrived before we stored the provider's id;
+// the handler answers 500 so the gateway delivers it again.
+var ErrNotYetKnown = errors.New("payment: not yet known")
+
 var ErrPaymentDown = httpx.ErrUnavailable.WithDetail("The payment service is not responding. Try again in a minute")
 
 // Hook lets a module (checkout, membership) react to a payment inside the
@@ -79,6 +83,33 @@ func (s *Service) Start(ctx context.Context, purpose, ref string, account *uuid.
 		return Checkout{}, err
 	}
 	return Checkout{PaymentID: p.ID, CheckoutURL: o.CheckoutURL}, nil
+}
+
+// ChargeMandate collects a renewal through a standing mandate. The capture
+// arrives by webhook like any other payment (purpose RENEWAL).
+func (s *Service) ChargeMandate(ctx context.Context, purpose, ref string, account *uuid.UUID, amount int64, mandateID string) (uuid.UUID, error) {
+	p, err := s.Q.GetPaymentByRef(ctx, ref)
+	if errors.Is(err, pgx.ErrNoRows) {
+		id, _ := uuid.NewV7()
+		p, err = s.Q.CreatePayment(ctx, store.CreatePaymentParams{ID: id, Purpose: purpose, Ref: ref, AccountID: account, Provider: s.Provider.Name(), AmountPaise: amount})
+	}
+	if err != nil {
+		return uuid.Nil, err
+	}
+	st, err := s.Provider.ChargeMandate(ctx, mandateID, amount, ref)
+	if err != nil {
+		s.Log.Error("mandate charge", "ref", ref, "err", err)
+		return p.ID, ErrPaymentDown
+	}
+	return p.ID, s.Q.SetProviderOrder(ctx, store.SetProviderOrderParams{ID: p.ID, ProviderOrderID: &st.ProviderOrderID})
+}
+
+// RevokeMandate stops future renewals at the provider.
+func (s *Service) RevokeMandate(ctx context.Context, mandateID string) error {
+	if err := s.Provider.RevokeMandate(ctx, mandateID); err != nil && !errors.Is(err, provider.ErrRejected) {
+		return ErrPaymentDown
+	}
+	return nil
 }
 
 // Refund sends money back for a captured payment.
@@ -153,8 +184,8 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 	case "payment.captured", "payment.failed":
 		p, err := q.GetPaymentByProviderOrder(ctx, ptr(e.Str("orderId")))
 		if errors.Is(err, pgx.ErrNoRows) {
-			s.Log.Warn("webhook for unknown payment", "event", e.ID, "order", e.Str("orderId"))
-			return nil, nil
+			// The event can beat our own write of the provider id: refuse it so the gateway retries.
+			return nil, fmt.Errorf("%w: payment for order %s", ErrNotYetKnown, e.Str("orderId"))
 		}
 		if err != nil {
 			return nil, err
@@ -191,7 +222,10 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 		}
 		r, err := q.MarkRefundDone(ctx, store.MarkRefundDoneParams{ProviderRefundID: ptr(e.Str("refundId")), Status: status})
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
+			if _, gerr := q.GetRefundByProviderID(ctx, ptr(e.Str("refundId"))); errors.Is(gerr, pgx.ErrNoRows) {
+				return nil, fmt.Errorf("%w: refund %s", ErrNotYetKnown, e.Str("refundId"))
+			}
+			return nil, nil // already final
 		}
 		if err != nil {
 			return nil, err

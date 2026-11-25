@@ -181,6 +181,28 @@ func (q *Queries) GetPaymentByRef(ctx context.Context, ref string) (Payment, err
 	return i, err
 }
 
+const getRefundByProviderID = `-- name: GetRefundByProviderID :one
+SELECT id, payment_id, ref, amount_paise, electrons, status, provider_refund_id, reason, created_at, updated_at FROM refunds WHERE provider_refund_id = $1
+`
+
+func (q *Queries) GetRefundByProviderID(ctx context.Context, providerRefundID *string) (Refund, error) {
+	row := q.db.QueryRow(ctx, getRefundByProviderID, providerRefundID)
+	var i Refund
+	err := row.Scan(
+		&i.ID,
+		&i.PaymentID,
+		&i.Ref,
+		&i.AmountPaise,
+		&i.Electrons,
+		&i.Status,
+		&i.ProviderRefundID,
+		&i.Reason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const markPaymentCaptured = `-- name: MarkPaymentCaptured :one
 UPDATE payments
 SET status = 'CAPTURED', provider_payment_id = $2, method = $3, mandate_id = $4, captured_at = coalesce(captured_at, now()),

@@ -30,8 +30,12 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/electrons"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/launch"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/m3http"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/membership"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
@@ -82,6 +86,10 @@ type env struct {
 	iss    *issues.Service
 	note   *notify.Service
 	sent   *recorder
+	lau    *launch.Service
+	mem    *membership.Service
+	led    *electrons.Service
+	rdb    *redis.Client
 }
 
 func setup(t *testing.T) *env {
@@ -99,7 +107,7 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments, issues, notifications, notification_prefs CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments, issues, notifications, notification_prefs, launches, memberships, membership_purchases, electron_lots, ledger_entries CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := catalogue.Seed(ctx, pool); err != nil {
@@ -118,7 +126,11 @@ func setup(t *testing.T) *env {
 	shipSecret := []byte("ship-secret")
 	ships := &shipping.Service{Pool: pool, Q: q, Log: log}
 	co := &checkout.Service{Pool: pool, Q: q, Payments: pays, PublicURL: "http://shop.test", Log: log, Shipping: ships}
-	pays.Hooks = map[string]payment.Hook{"ORDER": co.OnPayment}
+	lau := &launch.Service{Pool: pool, Q: q, Redis: rdb, Secret: []byte("pass"), Log: log}
+	mem := &membership.Service{Pool: pool, Q: q, Payments: pays, PublicURL: "http://shop.test", Log: log}
+	led := &electrons.Service{Pool: pool, Q: q}
+	co.Launches = lau
+	pays.Hooks = map[string]payment.Hook{"ORDER": co.OnPayment, "MEMBERSHIP": mem.OnPayment, "RENEWAL": mem.OnPayment}
 	ord := &orders.Service{Pool: pool, Q: q, Payments: pays, Log: log}
 	ret := &returns.Service{Pool: pool, Q: q, Payments: pays, Log: log}
 	ships.Returns = ret.OnTracking
@@ -132,6 +144,7 @@ func setup(t *testing.T) *env {
 		Log: log, Health: &health.Handler{}, AuthService: authSvc, Auth: auth.NewHandler(authSvc, nil, false),
 		Cart:    &cart.Handler{Svc: &cart.Service{Pool: pool, Q: q}},
 		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships}, Orders: &orders.Handler{Svc: ord}, Returns: &returns.Handler{Svc: ret}, Issues: &issues.Handler{Svc: iss}, Notify: &notify.Handler{Svc: note, Redis: rdb, StreamFor: 3 * time.Second},
+		M3: &m3http.Handler{Electrons: led, Membership: mem, Launches: lau, Redis: rdb},
 	}))
 	t.Cleanup(srv.Close)
 	sim := simpay.New(simpay.Config{PublicURL: "http://shop.test", APIKey: "k", WebhookURL: srv.URL + "/api/v1/webhooks/payment",
@@ -146,7 +159,7 @@ func setup(t *testing.T) *env {
 	ships.Provider = shipprovider.NewSim(shipSrv.URL, "sk", shipSecret)
 	ret.Courier = ships.Provider
 	return &env{t: t, ctx: ctx, pool: pool, srv: srv, prods: &product.Service{Pool: pool, Q: q, Store: storage.NewMemory(), Log: log}, inbox: in, mr: mr,
-		co: co, sim: sim, simURL: simSrv.URL, ship: ships, ships: shipSim, ord: ord, ret: ret, iss: iss, note: note, sent: sent}
+		co: co, sim: sim, simURL: simSrv.URL, ship: ships, ships: shipSim, ord: ord, ret: ret, iss: iss, note: note, sent: sent, lau: lau, mem: mem, led: led, rdb: rdb}
 }
 
 // listed creates a live product with one variant and returns its variant ID.
@@ -261,6 +274,7 @@ func (e *env) buyer(phone string) (*client, string) { return e.buyerAt(phone, "5
 func (e *env) buyerAt(phone, pin string) (*client, string) {
 	b := e.browser()
 	b.signIn(phone, "BUYER")
+	e.makeMember("+91" + phone)
 	st, a := b.do("POST", "/me/addresses", map[string]any{"name": "Asha Rao", "phone": "+91 98765 00000", "line1": "12 MG Road",
 		"city": "Bengaluru", "state": "Karnataka", "pincode": pin}, true)
 	if st != 201 || a["isDefault"] != true {
@@ -580,6 +594,7 @@ func TestPinServiceability(t *testing.T) {
 	bank, _, _ := e.listed("Volt Store", "Volt Cell", 279900, 5)
 	b := e.browser()
 	b.signIn("9876511111", "BUYER")
+	e.makeMember("+919876511111")
 	if st, o := b.do("POST", "/me/addresses", map[string]any{"name": "Asha Rao", "phone": "9876500000", "line1": "1 Road",
 		"city": "Nowhere", "state": "Delhi", "pincode": simship.PinNotServiceable}, true); st != 422 || o["code"] != "PIN_NOT_SERVICEABLE" {
 		t.Fatalf("unserviceable PIN: %d %v", st, o)
@@ -1152,5 +1167,15 @@ func TestNotificationsAreRoutedOnceAndStreamed(t *testing.T) {
 	other, _ := e.buyer("9876533333")
 	if _, l := other.do("GET", "/me/notifications", nil, false); len(l["items"].([]any)) != 0 {
 		t.Fatalf("someone else's inbox: %v", l)
+	}
+}
+
+// makeMember gives the account with this phone an active Electra Membership.
+func (e *env) makeMember(phone string) {
+	e.t.Helper()
+	if _, err := e.pool.Exec(e.ctx, `INSERT INTO memberships (id, account_id, status, started_at, expires_at, auto_renew)
+		SELECT gen_random_uuid(), id, 'ACTIVE', now(), now() + interval '365 days', false FROM accounts WHERE phone_e164 = $1 AND role = 'BUYER'
+		ON CONFLICT (account_id) DO NOTHING`, phone); err != nil {
+		e.t.Fatal(err)
 	}
 }

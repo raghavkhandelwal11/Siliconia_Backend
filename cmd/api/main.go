@@ -19,8 +19,12 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/electrons"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/issues"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/launch"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/m3http"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/membership"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/notify"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
@@ -104,8 +108,10 @@ func main() {
 		Provider: shippingprovider.NewSim(cfg.SimShipURL, cfg.SimShipAPIKey, []byte(cfg.SimShipWebhookSecret))}
 	returnSvc := &returns.Service{Pool: pool, Q: authSvc.Q, Courier: shipments.Provider, Payments: payments, Log: log}
 	shipments.Returns = returnSvc.OnTracking
-	checkouts := &checkout.Service{Shipping: shipments, Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log}
-	payments.Hooks = map[string]payment.Hook{"ORDER": checkouts.OnPayment}
+	launches := &launch.Service{Pool: pool, Q: authSvc.Q, Redis: rdb, Limiter: limiter, Secret: []byte("launch-pass:" + cfg.AuthSigningKey), Log: log}
+	members := &membership.Service{Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log}
+	checkouts := &checkout.Service{Shipping: shipments, Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log, Launches: launches}
+	payments.Hooks = map[string]payment.Hook{"ORDER": checkouts.OnPayment, "MEMBERSHIP": members.OnPayment, "RENEWAL": members.OnPayment}
 	products := &product.Service{Pool: pool, Q: authSvc.Q, Store: media, Limiter: limiter, Log: log}
 	sellers := &seller.Service{
 		Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL),
@@ -130,6 +136,7 @@ func main() {
 		Returns:        &returns.Handler{Svc: returnSvc},
 		Issues:         &issues.Handler{Svc: &issues.Service{Pool: pool, Q: authSvc.Q, Log: log}},
 		Notify:         &notify.Handler{Svc: &notify.Service{Pool: pool, Q: authSvc.Q, Log: log}, Redis: rdb},
+		M3:             &m3http.Handler{Electrons: &electrons.Service{Pool: pool, Q: authSvc.Q}, Membership: members, Launches: launches, Redis: rdb},
 		Orders:         &orders.Handler{Svc: &orders.Service{Pool: pool, Q: authSvc.Q, Payments: payments, Log: log}},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{

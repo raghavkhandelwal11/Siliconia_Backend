@@ -153,9 +153,9 @@ func main() {
 		fail(log, err)
 	}
 	// The pickup address lets testers ship demo orders through sim-ship.
-	if _, err := pool.Exec(ctx, `INSERT INTO seller_profiles (account_id, business_type, legal_name, store_name, verified_tag, submitted_at, decided_at, pickup_address)
+	if _, err := pool.Exec(ctx, `INSERT INTO seller_profiles (account_id, business_type, legal_name, store_name, verified_tag, submitted_at, decided_at, pickup_address, is_platform)
 		VALUES ($1, 'PRIVATE_LIMITED', 'Siliconics Demo Store Pvt Ltd', 'Siliconics Demo Store', true, now(), now(),
-		'{"line1":"Plot 4, Sector 63","city":"Noida","state":"Uttar Pradesh","pincode":"201301","phone":"9999900099"}')`, seller); err != nil {
+		'{"line1":"Plot 4, Sector 63","city":"Noida","state":"Uttar Pradesh","pincode":"201301","phone":"9999900099"}', true)`, seller); err != nil {
 		fail(log, err)
 	}
 	svc := &product.Service{Pool: pool, Q: q, Store: media, Log: log}

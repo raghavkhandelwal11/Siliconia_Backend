@@ -95,7 +95,7 @@ JOIN accounts a ON a.id = p.seller_id AND a.status = 'ACTIVE' AND a.approval = '
 JOIN seller_profiles sp ON sp.account_id = p.seller_id
 JOIN LATERAL (SELECT v.price_paise, v.mrp_paise FROM variants v WHERE v.product_id = p.id ORDER BY v.price_paise, v.position LIMIT 1) pv ON TRUE
 JOIN LATERAL (SELECT coalesce(sum(l.quantity - l.reserved - l.sold), 0)::int AS available, coalesce(sum(l.sold), 0)::int AS sold
-              FROM inventory_lots l JOIN variants v ON v.id = l.variant_id WHERE v.product_id = p.id) st ON TRUE
+              FROM inventory_lots l JOIN variants v ON v.id = l.variant_id WHERE v.product_id = p.id AND l.kind = 'SELLER') st ON TRUE
 LEFT JOIN LATERAL (SELECT u.storage_key FROM product_images i JOIN uploads u ON u.id = i.upload_id
                    WHERE i.product_id = p.id ORDER BY i.position LIMIT 1) cov ON TRUE
 WHERE p.status = 'ACTIVE'`

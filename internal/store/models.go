@@ -105,11 +105,59 @@ func (ns NullApprovalStatus) Value() (driver.Value, error) {
 	return string(ns.ApprovalStatus), nil
 }
 
+type LaunchStatus string
+
+const (
+	LaunchStatusDRAFT        LaunchStatus = "DRAFT"
+	LaunchStatusSCHEDULED    LaunchStatus = "SCHEDULED"
+	LaunchStatusLIVE         LaunchStatus = "LIVE"
+	LaunchStatusDEALSOLDOUT  LaunchStatus = "DEAL_SOLD_OUT"
+	LaunchStatusNORMALONSALE LaunchStatus = "NORMAL_ON_SALE"
+	LaunchStatusCOMPLETED    LaunchStatus = "COMPLETED"
+	LaunchStatusCANCELLED    LaunchStatus = "CANCELLED"
+)
+
+func (e *LaunchStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LaunchStatus(s)
+	case string:
+		*e = LaunchStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LaunchStatus: %T", src)
+	}
+	return nil
+}
+
+type NullLaunchStatus struct {
+	LaunchStatus LaunchStatus `json:"launchStatus"`
+	Valid        bool         `json:"valid"` // Valid is true if LaunchStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLaunchStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.LaunchStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LaunchStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLaunchStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LaunchStatus), nil
+}
+
 type LotKind string
 
 const (
 	LotKindSELLER       LotKind = "SELLER"
 	LotKindLAUNCHNORMAL LotKind = "LAUNCH_NORMAL"
+	LotKindLAUNCHDEAL   LotKind = "LAUNCH_DEAL"
 )
 
 func (e *LotKind) Scan(src interface{}) error {
@@ -145,6 +193,51 @@ func (ns NullLotKind) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.LotKind), nil
+}
+
+type LotStatus string
+
+const (
+	LotStatusPENDING   LotStatus = "PENDING"
+	LotStatusAVAILABLE LotStatus = "AVAILABLE"
+	LotStatusEXHAUSTED LotStatus = "EXHAUSTED"
+	LotStatusEXPIRED   LotStatus = "EXPIRED"
+	LotStatusREVERSED  LotStatus = "REVERSED"
+)
+
+func (e *LotStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LotStatus(s)
+	case string:
+		*e = LotStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LotStatus: %T", src)
+	}
+	return nil
+}
+
+type NullLotStatus struct {
+	LotStatus LotStatus `json:"lotStatus"`
+	Valid     bool      `json:"valid"` // Valid is true if LotStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLotStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.LotStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LotStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLotStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LotStatus), nil
 }
 
 type PayMethod string
@@ -337,6 +430,20 @@ type ConfigHistory struct {
 	ChangedAt time.Time  `json:"changedAt"`
 }
 
+type ElectronLot struct {
+	ID          uuid.UUID  `json:"id"`
+	AccountID   uuid.UUID  `json:"accountId"`
+	Source      string     `json:"source"`
+	SourceRef   uuid.UUID  `json:"sourceRef"`
+	Amount      int32      `json:"amount"`
+	Remaining   int32      `json:"remaining"`
+	Status      LotStatus  `json:"status"`
+	AvailableAt *time.Time `json:"availableAt"`
+	ExpiresAt   *time.Time `json:"expiresAt"`
+	IsSynthetic bool       `json:"isSynthetic"`
+	CreatedAt   time.Time  `json:"createdAt"`
+}
+
 type IdempotencyKey struct {
 	AccountID   uuid.UUID `json:"accountId"`
 	Route       string    `json:"route"`
@@ -393,6 +500,87 @@ type KycRecord struct {
 	NameMatch    float32   `json:"nameMatch"`
 	Reason       *string   `json:"reason"`
 	CheckedAt    time.Time `json:"checkedAt"`
+}
+
+type Launch struct {
+	ID               uuid.UUID    `json:"id"`
+	ProductID        uuid.UUID    `json:"productId"`
+	VariantID        uuid.UUID    `json:"variantId"`
+	SellerID         uuid.UUID    `json:"sellerId"`
+	UnitsBought      int32        `json:"unitsBought"`
+	UnitCostPaise    int64        `json:"unitCostPaise"`
+	NormalPricePaise int64        `json:"normalPricePaise"`
+	DealDiscountBps  int32        `json:"dealDiscountBps"`
+	DealPricePaise   int64        `json:"dealPricePaise"`
+	MinProfitBps     int32        `json:"minProfitBps"`
+	DealUnits        int32        `json:"dealUnits"`
+	DealRemaining    int32        `json:"dealRemaining"`
+	PerMemberLimit   int32        `json:"perMemberLimit"`
+	StartsAt         time.Time    `json:"startsAt"`
+	NormalSaleMode   string       `json:"normalSaleMode"`
+	NormalSaleAt     *time.Time   `json:"normalSaleAt"`
+	WaitingRoomRps   *int32       `json:"waitingRoomRps"`
+	DealLotID        *uuid.UUID   `json:"dealLotId"`
+	NormalLotID      *uuid.UUID   `json:"normalLotId"`
+	Status           LaunchStatus `json:"status"`
+	CreatedBy        uuid.UUID    `json:"createdBy"`
+	CreatedAt        time.Time    `json:"createdAt"`
+	Version          int32        `json:"version"`
+}
+
+type LaunchClaim struct {
+	ID        uuid.UUID  `json:"id"`
+	LaunchID  uuid.UUID  `json:"launchId"`
+	AccountID uuid.UUID  `json:"accountId"`
+	Qty       int32      `json:"qty"`
+	Status    string     `json:"status"`
+	OrderID   *uuid.UUID `json:"orderId"`
+	HeldUntil time.Time  `json:"heldUntil"`
+	CreatedAt time.Time  `json:"createdAt"`
+}
+
+type LaunchMemberCounter struct {
+	LaunchID  uuid.UUID `json:"launchId"`
+	AccountID uuid.UUID `json:"accountId"`
+	Claimed   int32     `json:"claimed"`
+}
+
+type LedgerEntry struct {
+	ID        uuid.UUID  `json:"id"`
+	AccountID uuid.UUID  `json:"accountId"`
+	Type      string     `json:"type"`
+	Amount    int32      `json:"amount"`
+	LotID     *uuid.UUID `json:"lotId"`
+	RefType   string     `json:"refType"`
+	RefID     uuid.UUID  `json:"refId"`
+	Note      string     `json:"note"`
+	CreatedAt time.Time  `json:"createdAt"`
+}
+
+type Membership struct {
+	ID              uuid.UUID  `json:"id"`
+	AccountID       uuid.UUID  `json:"accountId"`
+	Status          string     `json:"status"`
+	StartedAt       time.Time  `json:"startedAt"`
+	ExpiresAt       time.Time  `json:"expiresAt"`
+	AutoRenew       bool       `json:"autoRenew"`
+	MandateID       *string    `json:"mandateId"`
+	RenewAttempts   int32      `json:"renewAttempts"`
+	PredebitSentFor *time.Time `json:"predebitSentFor"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+}
+
+type MembershipPurchase struct {
+	ID            uuid.UUID  `json:"id"`
+	Ref           string     `json:"ref"`
+	AccountID     uuid.UUID  `json:"accountId"`
+	Kind          string     `json:"kind"`
+	ElectronsUsed int32      `json:"electronsUsed"`
+	AmountPaise   int64      `json:"amountPaise"`
+	AutoRenew     bool       `json:"autoRenew"`
+	Status        string     `json:"status"`
+	PaymentID     *uuid.UUID `json:"paymentId"`
+	CreatedAt     time.Time  `json:"createdAt"`
 }
 
 type Notification struct {
@@ -640,6 +828,12 @@ type Shipment struct {
 	LastEventAt    *time.Time `json:"lastEventAt"`
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
+}
+
+type SpendAllocation struct {
+	LedgerEntryID uuid.UUID `json:"ledgerEntryId"`
+	LotID         uuid.UUID `json:"lotId"`
+	Amount        int32     `json:"amount"`
 }
 
 type SubOrder struct {

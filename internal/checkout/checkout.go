@@ -23,6 +23,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/electrons"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/launch"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/membership"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
@@ -34,8 +37,9 @@ import (
 
 // Pay methods a buyer can choose at checkout.
 const (
-	PayOnline = "ONLINE"
-	PayCOD    = "COD"
+	PayOnline        = "ONLINE"
+	PayCOD           = "COD"
+	PayElectronsOnly = "ELECTRONS_ONLY"
 )
 
 var (
@@ -59,6 +63,7 @@ type PinChecker interface {
 // Service runs checkout.
 type Service struct {
 	Shipping  PinChecker // nil: every PIN is served with COD (unit tests)
+	Launches  *launch.Service
 	Pool      *pgxpool.Pool
 	Q         *store.Queries
 	Payments  *payment.Service
@@ -133,7 +138,14 @@ type Quote struct {
 	PayablePaise       int64        `json:"payablePaise"`
 	CODEligible        bool         `json:"codEligible"`
 	CODLimitPaise      int64        `json:"codLimitPaise"`
-	CODReason          string       `json:"codReason,omitempty"` // OVER_LIMIT, PIN_NO_COD
+	CODReason          string       `json:"codReason,omitempty"` // NOT_MEMBER, LAUNCH_DEAL, OVER_LIMIT, PIN_NO_COD
+	IsMember           bool         `json:"isMember"`
+	ElectronsAvailable int32        `json:"electronsAvailable"`
+	ElectronsMax       int32        `json:"electronsMax"`
+	ElectronsUsed      int32        `json:"electronsUsed"`
+	ElectronsEarn      int64        `json:"electronsEarn"`
+	ElectronsOnly      bool         `json:"electronsOnly"`
+	LaunchDeal         bool         `json:"launchDeal"`
 	Delivery           *Delivery    `json:"delivery,omitempty"`
 	ElectronsNonMember int64        `json:"electronsNonMember"`
 	ElectronsMember    int64        `json:"electronsMember"`
@@ -149,7 +161,19 @@ type built struct {
 
 // build prices the cart lines. Shipping is free in the prototype (the BRD
 // sets no delivery fee); serviceability arrives with sim-ship (T2.4).
-func (s *Service) build(ctx context.Context, q *store.Queries, rows []store.CheckoutLinesRow, addr *store.Address, payMethod string, rules Rules) built {
+// opts are the buyer-specific inputs to a quote.
+type opts struct {
+	member     bool
+	balance    int32
+	electrons  int32
+	launchDeal bool
+	claim      string // claim or launch id, part of the quote hash
+}
+
+// ErrTooManyElectrons means the buyer asked to use more than allowed.
+var ErrTooManyElectrons = httpx.NewError(http.StatusUnprocessableEntity, "ELECTRONS_TOO_MANY", "You can use up to your available Electrons and the order total")
+
+func (s *Service) build(ctx context.Context, q *store.Queries, rows []store.CheckoutLinesRow, addr *store.Address, payMethod string, rules Rules, o opts) built {
 	var sv *shipping.Serviceability
 	if addr != nil {
 		v := s.pin(ctx, addr.Pincode)
@@ -190,10 +214,22 @@ func (s *Service) build(ctx context.Context, q *store.Queries, rows []store.Chec
 		h.Write([]byte(r.VariantID.String() + ":" + strconv.Itoa(int(r.Qty)) + ":" + strconv.FormatInt(r.PricePaise, 10) + ";"))
 	}
 	out.SavingsPaise = out.MrpTotalPaise - out.ItemTotalPaise
-	out.PayablePaise = out.ItemTotalPaise + out.ShippingPaise
-	out.CODEligible = out.PayablePaise > 0 && out.PayablePaise <= rules.CODMaxPaise
-	if !out.CODEligible {
+	out.IsMember, out.LaunchDeal, out.ElectronsAvailable = o.member, o.launchDeal, o.balance
+	out.ElectronsMax = int32(min(int64(o.balance), out.ItemTotalPaise/100))
+	out.ElectronsUsed = min(o.electrons, out.ElectronsMax)
+	out.PayablePaise = out.ItemTotalPaise - int64(out.ElectronsUsed)*100 + out.ShippingPaise
+	out.ElectronsOnly = out.PayablePaise == 0 && out.ItemTotalPaise > 0
+	out.ElectronsEarn = rules.Electrons.Earn(out.ItemTotalPaise-int64(out.ElectronsUsed)*100, o.member)
+	// COD (LLD 9.3): members only, within the limit, no launch deals, and the PIN must allow it.
+	switch {
+	case !o.member:
+		out.CODReason = "NOT_MEMBER"
+	case o.launchDeal:
+		out.CODReason = "LAUNCH_DEAL"
+	case out.PayablePaise <= 0 || out.PayablePaise > rules.CODMaxPaise:
 		out.CODReason = "OVER_LIMIT"
+	default:
+		out.CODEligible = true
 	}
 	deliverable := true
 	if sv != nil && sv.Known {
@@ -218,16 +254,127 @@ func (s *Service) build(ctx context.Context, q *store.Queries, rows []store.Chec
 		out.Address = &a
 		h.Write([]byte(addr.ID.String()))
 	}
-	h.Write([]byte(payMethod))
+	h.Write([]byte(payMethod + "|" + strconv.Itoa(int(out.ElectronsUsed)) + "|" + o.claim))
 	out.QuoteHash = hex.EncodeToString(h.Sum(nil))[:24]
-	out.CanPlace = ok && addr != nil && deliverable && (payMethod != PayCOD || out.CODEligible)
+	out.CanPlace = ok && addr != nil && deliverable && (out.ElectronsOnly || payMethod != PayCOD || out.CODEligible)
 	return built{quote: out, rows: rows}
 }
 
-// QuoteInput chooses the address and how to pay.
+// QuoteInput chooses the address and how to pay. With a launch claim (deal
+// units) or a launch id and quantity (launch stock at the normal price) the
+// order is that item alone instead of the cart.
 type QuoteInput struct {
-	AddressID *uuid.UUID `json:"addressId"`
-	PayMethod string     `json:"payMethod"`
+	AddressID     *uuid.UUID `json:"addressId"`
+	PayMethod     string     `json:"payMethod"`
+	Electrons     int32      `json:"electrons"`
+	LaunchClaimID *uuid.UUID `json:"launchClaimId"`
+	LaunchID      *uuid.UUID `json:"launchId"`
+	Qty           int32      `json:"qty"`
+}
+
+// source is where an order's lines come from.
+type source struct {
+	rows     []store.CheckoutLinesRow
+	cartID   *uuid.UUID
+	launchID *uuid.UUID
+	claim    *store.LaunchClaim
+	deal     bool
+	key      string
+}
+
+var (
+	ErrClaimGone   = httpx.NewError(http.StatusConflict, "CLAIM_EXPIRED", "Your reserved deal has expired. Reserve again if units are left")
+	ErrLaunchState = httpx.NewError(http.StatusConflict, "LAUNCH_NOT_ON_SALE", "Launch units are not on sale right now")
+)
+
+// lines loads the cart, a held launch claim, or launch-normal units.
+func (s *Service) lines(ctx context.Context, q *store.Queries, buyer uuid.UUID, in QuoteInput, lock bool) (source, error) {
+	launchRow := func(id uuid.UUID, deal bool, qty int32) (store.CheckoutLinesRow, error) {
+		l, err := q.LaunchLine(ctx, id)
+		if err != nil {
+			return store.CheckoutLinesRow{}, err
+		}
+		price, lot, avail := l.NormalPricePaise, l.NormalLotID, l.NormalAvailable
+		if deal {
+			price, lot, avail = l.DealPricePaise, l.DealLotID, qty
+		}
+		yes := true
+		return store.CheckoutLinesRow{VariantID: l.VariantID, Qty: qty, PricePaise: price, MrpPaise: l.MrpPaise, Attrs: l.Attrs, ProductID: l.ProductID,
+			Name: l.Name, Slug: l.Slug, SellerID: l.SellerID, StoreName: l.StoreName, GstRateBps: l.GstRateBps, Hsn: l.Hsn, CommissionBps: l.CommissionBps,
+			Buyable: &yes, LotID: lot, Available: avail, Cover: l.Cover}, nil
+	}
+	switch {
+	case in.LaunchClaimID != nil:
+		c, err := q.GetClaimForUpdate(ctx, *in.LaunchClaimID)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && c.AccountID != buyer) {
+			return source{}, httpx.ErrNotFound
+		}
+		if err != nil {
+			return source{}, err
+		}
+		if c.Status != "HELD" || time.Now().After(c.HeldUntil) {
+			return source{}, ErrClaimGone
+		}
+		row, err := launchRow(c.LaunchID, true, c.Qty)
+		if err != nil {
+			return source{}, err
+		}
+		return source{rows: []store.CheckoutLinesRow{row}, launchID: &c.LaunchID, claim: &c, deal: true, key: "claim:" + c.ID.String()}, nil
+	case in.LaunchID != nil:
+		if in.Qty < 1 || in.Qty > 10 {
+			return source{}, httpx.ErrValidation.WithDetail("Quantity must be 1 to 10")
+		}
+		l, err := q.GetLaunch(ctx, *in.LaunchID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return source{}, httpx.ErrNotFound
+		}
+		if err != nil {
+			return source{}, err
+		}
+		if l.Status != store.LaunchStatusNORMALONSALE {
+			return source{}, ErrLaunchState
+		}
+		row, err := launchRow(l.ID, false, in.Qty)
+		if err != nil {
+			return source{}, err
+		}
+		return source{rows: []store.CheckoutLinesRow{row}, launchID: &l.ID, key: "launch:" + l.ID.String() + ":" + strconv.Itoa(int(in.Qty))}, nil
+	}
+	var cart store.Cart
+	var err error
+	if lock {
+		cart, err = q.LockCart(ctx, &buyer)
+	} else {
+		cart, err = q.GetCartByAccount(ctx, &buyer)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return source{}, ErrCartEmpty
+	}
+	if err != nil {
+		return source{}, err
+	}
+	rows, err := q.CheckoutLines(ctx, cart.ID)
+	if err != nil {
+		return source{}, err
+	}
+	if len(rows) == 0 {
+		return source{}, ErrCartEmpty
+	}
+	return source{rows: rows, cartID: &cart.ID}, nil
+}
+
+func (s *Service) buyerOpts(ctx context.Context, q *store.Queries, buyer uuid.UUID, src source, electronsWanted int32) (opts, error) {
+	if electronsWanted < 0 {
+		return opts{}, ErrTooManyElectrons
+	}
+	bal, err := q.Balance(ctx, buyer)
+	if err != nil {
+		return opts{}, err
+	}
+	if electronsWanted > bal.Available {
+		return opts{}, ErrTooManyElectrons
+	}
+	return opts{member: membership.IsMember(ctx, q, buyer), balance: bal.Available, electrons: electronsWanted, launchDeal: src.deal, claim: src.key}, nil
 }
 
 func checkMethod(m string) (string, error) {
@@ -257,28 +404,26 @@ func (s *Service) Quote(ctx context.Context, buyer uuid.UUID, in QuoteInput) (Qu
 		}
 		addr = &a
 	}
-	cart, err := s.Q.GetCartByAccount(ctx, &buyer)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Quote{}, ErrCartEmpty
-	}
+	src, err := s.lines(ctx, s.Q, buyer, in, false)
 	if err != nil {
 		return Quote{}, err
 	}
-	rows, err := s.Q.CheckoutLines(ctx, cart.ID)
+	o, err := s.buyerOpts(ctx, s.Q, buyer, src, in.Electrons)
 	if err != nil {
 		return Quote{}, err
 	}
-	if len(rows) == 0 {
-		return Quote{}, ErrCartEmpty
-	}
-	return s.build(ctx, s.Q, rows, addr, method, s.rules(ctx, s.Q)).quote, nil
+	return s.build(ctx, s.Q, src.rows, addr, method, s.rules(ctx, s.Q), o).quote, nil
 }
 
 // PlaceInput is what the buyer confirms.
 type PlaceInput struct {
-	AddressID uuid.UUID `json:"addressId"`
-	PayMethod string    `json:"payMethod"`
-	QuoteHash string    `json:"quoteHash"`
+	AddressID     uuid.UUID  `json:"addressId"`
+	PayMethod     string     `json:"payMethod"`
+	QuoteHash     string     `json:"quoteHash"`
+	Electrons     int32      `json:"electrons"`
+	LaunchClaimID *uuid.UUID `json:"launchClaimId"`
+	LaunchID      *uuid.UUID `json:"launchId"`
+	Qty           int32      `json:"qty"`
 }
 
 // Buyer is who places the order.
@@ -305,7 +450,8 @@ func (s *Service) Place(ctx context.Context, b Buyer, key string, in PlaceInput)
 	if acc.PhoneVerifiedAt == nil {
 		return OrderView{}, ErrPhoneRequired
 	}
-	reqHash := sha256.Sum256([]byte(in.AddressID.String() + "|" + method + "|" + in.QuoteHash))
+	reqHash := sha256.Sum256([]byte(in.AddressID.String() + "|" + method + "|" + in.QuoteHash + "|" + strconv.Itoa(int(in.Electrons))))
+	qin := QuoteInput{AddressID: &in.AddressID, PayMethod: method, Electrons: in.Electrons, LaunchClaimID: in.LaunchClaimID, LaunchID: in.LaunchID, Qty: in.Qty}
 
 	var orderID uuid.UUID
 	var replay bool
@@ -339,22 +485,20 @@ func (s *Service) Place(ctx context.Context, b Buyer, key string, in PlaceInput)
 		if err != nil {
 			return err
 		}
-		cart, err := q.LockCart(ctx, &b.ID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrCartEmpty
-		}
+		src, err := s.lines(ctx, q, b.ID, qin, true)
 		if err != nil {
 			return err
 		}
-		rows, err := q.CheckoutLines(ctx, cart.ID)
+		rows := src.rows
+		bo, err := s.buyerOpts(ctx, q, b.ID, src, in.Electrons)
 		if err != nil {
 			return err
-		}
-		if len(rows) == 0 {
-			return ErrCartEmpty
 		}
 		rules := s.rules(ctx, q)
-		bq := s.build(ctx, q, rows, &addr, method, rules)
+		bq := s.build(ctx, q, rows, &addr, method, rules, bo)
+		if bq.quote.ElectronsUsed != in.Electrons {
+			return ErrTooManyElectrons
+		}
 		switch {
 		case bq.quote.Delivery != nil && !bq.quote.Delivery.Deliverable:
 			return ErrNoDelivery
@@ -377,7 +521,10 @@ func (s *Service) Place(ctx context.Context, b Buyer, key string, in PlaceInput)
 		now := time.Now()
 		status, subStatus := "PENDING_PAYMENT", store.SubStatusPENDINGPAYMENT
 		var confirmed *time.Time
-		if method == PayCOD {
+		if bq.quote.ElectronsOnly {
+			method = PayElectronsOnly
+		}
+		if method == PayCOD || method == PayElectronsOnly {
 			status, subStatus, confirmed = "CONFIRMED", store.SubStatusCONFIRMED, &now
 		}
 		if err := q.SetActor(ctx, store.SetActorParams{Actor: "BUYER", Note: ""}); err != nil {
@@ -394,8 +541,20 @@ func (s *Service) Place(ctx context.Context, b Buyer, key string, in PlaceInput)
 		if err != nil {
 			return err
 		}
+		if err := q.SetOrderExtras(ctx, store.SetOrderExtrasParams{ID: orderID, ElectronsUsed: bq.quote.ElectronsUsed,
+			IsMemberAtOrder: bo.member, ContainsLaunchDeal: src.deal}); err != nil {
+			return err
+		}
+		if err := electrons.Spend(ctx, q, b.ID, bq.quote.ElectronsUsed, "SPEND_ORDER", electrons.RefOrder, orderID); err != nil {
+			return err
+		}
+		weights := make([]int64, len(rows))
+		for i, r := range rows {
+			weights[i] = r.PricePaise * int64(r.Qty)
+		}
+		spent := electrons.Split(int64(bq.quote.ElectronsUsed), weights)
 		subs := map[uuid.UUID]uuid.UUID{}
-		for _, r := range rows {
+		for i, r := range rows {
 			subID, ok := subs[r.SellerID]
 			if !ok {
 				subID, _ = uuid.NewV7()
@@ -422,20 +581,47 @@ func (s *Service) Place(ctx context.Context, b Buyer, key string, in PlaceInput)
 			}); err != nil {
 				return err
 			}
-			if method == PayCOD {
+			if spent[i] > 0 {
+				if err := q.SetItemElectrons(ctx, store.SetItemElectronsParams{ID: itemID, ElectronsSpent: int32(spent[i])}); err != nil {
+					return err
+				}
+			}
+			if src.launchID != nil {
+				priceType := "LAUNCH_NORMAL"
+				var claimID *uuid.UUID
+				if src.claim != nil {
+					priceType, claimID = "LAUNCH_DEAL", &src.claim.ID
+				}
+				if err := q.SetItemLaunch(ctx, store.SetItemLaunchParams{ID: itemID, PriceType: priceType, LaunchID: src.launchID, LaunchClaimID: claimID}); err != nil {
+					return err
+				}
+			}
+			if status == "CONFIRMED" {
 				if err := q.CommitReservedStock(ctx, store.CommitReservedStockParams{ID: *r.LotID, Qty: r.Qty}); err != nil {
 					return err
 				}
 			}
 		}
-		if err := q.ClearCart(ctx, cart.ID); err != nil {
-			return err
+		if src.cartID != nil {
+			if err := q.ClearCart(ctx, *src.cartID); err != nil {
+				return err
+			}
+		}
+		if src.claim != nil {
+			if err := q.SetClaimOrdered(ctx, store.SetClaimOrderedParams{ID: src.claim.ID, OrderID: &orderID, HeldUntil: order.ExpiresAt}); err != nil {
+				return err
+			}
+		}
+		if status == "CONFIRMED" {
+			if err := confirmExtras(ctx, q, orderID); err != nil {
+				return err
+			}
 		}
 		evt := map[string]any{"orderId": orderID, "number": order.Number, "buyerId": b.ID, "payMethod": method, "payablePaise": order.PayablePaise}
 		if _, err := outbox.Add(ctx, tx, "order.placed", order.Number, evt); err != nil {
 			return err
 		}
-		if method == PayCOD {
+		if status == "CONFIRMED" {
 			if _, err := outbox.Add(ctx, tx, "order.confirmed", order.Number, evt); err != nil {
 				return err
 			}
@@ -513,6 +699,9 @@ func (s *Service) OnPayment(ctx context.Context, tx pgx.Tx, q *store.Queries, p 
 				return nil, err
 			}
 		}
+		if err := confirmExtras(ctx, q, o.ID); err != nil {
+			return nil, err
+		}
 		_, err = outbox.Add(ctx, tx, "order.confirmed", o.Number, map[string]any{"orderId": o.ID, "number": o.Number, "buyerId": o.BuyerID, "payMethod": o.PayMethod, "payablePaise": o.PayablePaise})
 		return nil, err
 	case "EXPIRED": // money arrived too late: give it back automatically (LLD 8.3)
@@ -529,6 +718,7 @@ func (s *Service) OnPayment(ctx context.Context, tx pgx.Tx, q *store.Queries, p 
 // Sweep expires unpaid orders past their hold and releases their stock.
 func (s *Service) Sweep(ctx context.Context) (int, error) {
 	n := 0
+	var afters []func(context.Context)
 	err := db.InTx(ctx, s.Pool, func(tx pgx.Tx) error {
 		q := s.Q.WithTx(tx)
 		ids, err := q.DueForExpiry(ctx)
@@ -558,6 +748,16 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 					return err
 				}
 			}
+			if _, err := electrons.Restore(ctx, q, o.BuyerID, electrons.RefOrder, id, o.ElectronsUsed, "Order not paid in time"); err != nil {
+				return err
+			}
+			if s.Launches != nil {
+				fn, err := s.Launches.ReleaseForOrder(ctx, q, id)
+				if err != nil {
+					return err
+				}
+				afters = append(afters, fn)
+			}
 			if _, err := outbox.Add(ctx, tx, "order.expired", o.Number, map[string]any{"orderId": id, "number": o.Number, "buyerId": o.BuyerID}); err != nil {
 				return err
 			}
@@ -565,7 +765,21 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 		}
 		return nil
 	})
+	if err == nil {
+		for _, fn := range afters {
+			fn(ctx)
+		}
+	}
 	return n, err
+}
+
+// confirmExtras runs when an order is confirmed: Electrons are earned
+// (pending until the return window closes) and launch claims are paid.
+func confirmExtras(ctx context.Context, q *store.Queries, orderID uuid.UUID) error {
+	if err := electrons.EarnForOrder(ctx, q, orderID); err != nil {
+		return err
+	}
+	return q.SetClaimsPaid(ctx, &orderID)
 }
 
 var ist = time.FixedZone("IST", 19800)
