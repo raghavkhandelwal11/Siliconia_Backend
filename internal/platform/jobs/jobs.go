@@ -74,6 +74,12 @@ var Schedule = []Periodic{
 	{Spec: "0 2 1 * *", Type: TypeSettlePools, Queue: QueueDefault},
 	{Spec: "0 6 * * 1", Type: TypeCashoutBatch, Queue: QueueDefault},
 	{Spec: "30 3 * * *", Type: TypeDemoOverdue, Queue: QueueLow},
+	{Spec: "0 7 * * 1", Type: TypePayoutBatch, Queue: QueueDefault},
+	{Spec: "45 2 * * *", Type: TypeVerifiedTags, Queue: QueueLow},
+	{Spec: "@every 5m", Type: TypeSynthetic, Queue: QueueDefault},
+	{Spec: "30 4 * * *", Type: TypeReconcile, Queue: QueueDefault},
+	{Spec: "0 4 * * *", Type: TypeLedgerCheck, Queue: QueueLow},
+	{Spec: "30 2 * * *", Type: TypePurge, Queue: QueueLow},
 }
 
 // TypeHeartbeat proves the scheduler and worker are alive.
@@ -97,6 +103,16 @@ const (
 	TypeSettlePools    = "creators:settle-pools"
 	TypeCashoutBatch   = "creators:cashout-batch"
 	TypeDemoOverdue    = "creators:demo-overdue"
+)
+
+// M5 jobs (LLD 8.10-8.12, 12.4).
+const (
+	TypePayoutBatch  = "payouts:draft-batch"
+	TypeVerifiedTags = "sellers:verified-tags"
+	TypeSynthetic    = "health:synthetic"
+	TypeReconcile    = "payments:reconcile"
+	TypeLedgerCheck  = "electrons:invariant"
+	TypePurge        = "retention:purge"
 )
 
 // TypeCloseIssues closes issues resolved more than 7 days ago (LLD 10).

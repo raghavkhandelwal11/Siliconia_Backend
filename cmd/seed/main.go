@@ -36,6 +36,7 @@ var defaults = map[string]any{
 	"verified_tag.threshold_paise":   40000000,
 	"pow.weights":                    map[string]float64{"units": 0.6, "rating": 0.4},
 	"refund.reissue_expiry_days":     30,
+	"payouts.tds_bps":                10,
 }
 
 func main() {

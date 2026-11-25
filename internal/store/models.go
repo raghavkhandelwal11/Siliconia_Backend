@@ -527,6 +527,14 @@ type IdempotencyKey struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+type Incident struct {
+	ID         uuid.UUID  `json:"id"`
+	CheckName  string     `json:"checkName"`
+	OpenedAt   time.Time  `json:"openedAt"`
+	ResolvedAt *time.Time `json:"resolvedAt"`
+	LastError  *string    `json:"lastError"`
+}
+
 type InventoryLot struct {
 	ID            uuid.UUID  `json:"id"`
 	VariantID     uuid.UUID  `json:"variantId"`
@@ -618,6 +626,18 @@ type LaunchMemberCounter struct {
 	Claimed   int32     `json:"claimed"`
 }
 
+type LedgerAdjustmentRequest struct {
+	ID          uuid.UUID  `json:"id"`
+	AccountID   uuid.UUID  `json:"accountId"`
+	Amount      int32      `json:"amount"`
+	Reason      string     `json:"reason"`
+	RequestedBy uuid.UUID  `json:"requestedBy"`
+	ApprovedBy  *uuid.UUID `json:"approvedBy"`
+	Status      string     `json:"status"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	DecidedAt   *time.Time `json:"decidedAt"`
+}
+
 type LedgerEntry struct {
 	ID        uuid.UUID  `json:"id"`
 	AccountID uuid.UUID  `json:"accountId"`
@@ -628,6 +648,23 @@ type LedgerEntry struct {
 	RefID     uuid.UUID  `json:"refId"`
 	Note      string     `json:"note"`
 	CreatedAt time.Time  `json:"createdAt"`
+}
+
+type LegalAcceptance struct {
+	AccountID  uuid.UUID   `json:"accountId"`
+	DocID      uuid.UUID   `json:"docId"`
+	AcceptedAt time.Time   `json:"acceptedAt"`
+	Ip         *netip.Addr `json:"ip"`
+}
+
+type LegalDoc struct {
+	ID          uuid.UUID  `json:"id"`
+	Kind        string     `json:"kind"`
+	Version     int32      `json:"version"`
+	Title       string     `json:"title"`
+	BodyMd      string     `json:"bodyMd"`
+	PublishedAt time.Time  `json:"publishedAt"`
+	PublishedBy *uuid.UUID `json:"publishedBy"`
 }
 
 type Membership struct {
@@ -773,6 +810,44 @@ type Payment struct {
 	CheckoutUrl       *string       `json:"checkoutUrl"`
 }
 
+type Payout struct {
+	ID              uuid.UUID `json:"id"`
+	BatchID         uuid.UUID `json:"batchId"`
+	SellerID        uuid.UUID `json:"sellerId"`
+	GrossPaise      int64     `json:"grossPaise"`
+	CommissionPaise int64     `json:"commissionPaise"`
+	TdsPaise        int64     `json:"tdsPaise"`
+	NetPaise        int64     `json:"netPaise"`
+	Status          string    `json:"status"`
+	ProviderRef     *string   `json:"providerRef"`
+	BankRef         *string   `json:"bankRef"`
+	FailureReason   *string   `json:"failureReason"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type PayoutBatch struct {
+	ID         uuid.UUID   `json:"id"`
+	WeekEnding pgtype.Date `json:"weekEnding"`
+	Status     string      `json:"status"`
+	ApprovedBy *uuid.UUID  `json:"approvedBy"`
+	ReleasedBy *uuid.UUID  `json:"releasedBy"`
+	CreatedAt  time.Time   `json:"createdAt"`
+	UpdatedAt  time.Time   `json:"updatedAt"`
+}
+
+type PayoutClaim struct {
+	SubOrderID uuid.UUID `json:"subOrderId"`
+	PayoutID   uuid.UUID `json:"payoutId"`
+}
+
+type PayoutLine struct {
+	PayoutID        uuid.UUID `json:"payoutId"`
+	SubOrderID      uuid.UUID `json:"subOrderId"`
+	GrossPaise      int64     `json:"grossPaise"`
+	CommissionPaise int64     `json:"commissionPaise"`
+}
+
 type PoolSettlement struct {
 	PoolID         uuid.UUID  `json:"poolId"`
 	CreatorID      uuid.UUID  `json:"creatorId"`
@@ -868,6 +943,15 @@ type Promotion struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
+type ReconIssue struct {
+	ID        uuid.UUID   `json:"id"`
+	Day       pgtype.Date `json:"day"`
+	Kind      string      `json:"kind"`
+	Ref       string      `json:"ref"`
+	Detail    string      `json:"detail"`
+	CreatedAt time.Time   `json:"createdAt"`
+}
+
 type Refund struct {
 	ID               uuid.UUID `json:"id"`
 	PaymentID        uuid.UUID `json:"paymentId"`
@@ -940,31 +1024,32 @@ type RewardPool struct {
 }
 
 type SellerProfile struct {
-	AccountID       uuid.UUID  `json:"accountId"`
-	BusinessType    *string    `json:"businessType"`
-	LegalName       string     `json:"legalName"`
-	StoreName       string     `json:"storeName"`
-	PanEnc          []byte     `json:"panEnc"`
-	PanLast4        *string    `json:"panLast4"`
-	PanVerifiedAt   *time.Time `json:"panVerifiedAt"`
-	Gstin           *string    `json:"gstin"`
-	BankEnc         []byte     `json:"bankEnc"`
-	BankLast4       *string    `json:"bankLast4"`
-	Ifsc            *string    `json:"ifsc"`
-	AccountHolder   *string    `json:"accountHolder"`
-	BankVerifiedAt  *time.Time `json:"bankVerifiedAt"`
-	PickupAddress   []byte     `json:"pickupAddress"`
-	TermsVersion    *string    `json:"termsVersion"`
-	TermsAcceptedAt *time.Time `json:"termsAcceptedAt"`
-	SubmittedAt     *time.Time `json:"submittedAt"`
-	DecidedAt       *time.Time `json:"decidedAt"`
-	DecidedBy       *uuid.UUID `json:"decidedBy"`
-	IsPlatform      bool       `json:"isPlatform"`
-	VerifiedTag     bool       `json:"verifiedTag"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
-	Version         int32      `json:"version"`
-	InvoiceCounter  int32      `json:"invoiceCounter"`
+	AccountID            uuid.UUID  `json:"accountId"`
+	BusinessType         *string    `json:"businessType"`
+	LegalName            string     `json:"legalName"`
+	StoreName            string     `json:"storeName"`
+	PanEnc               []byte     `json:"panEnc"`
+	PanLast4             *string    `json:"panLast4"`
+	PanVerifiedAt        *time.Time `json:"panVerifiedAt"`
+	Gstin                *string    `json:"gstin"`
+	BankEnc              []byte     `json:"bankEnc"`
+	BankLast4            *string    `json:"bankLast4"`
+	Ifsc                 *string    `json:"ifsc"`
+	AccountHolder        *string    `json:"accountHolder"`
+	BankVerifiedAt       *time.Time `json:"bankVerifiedAt"`
+	PickupAddress        []byte     `json:"pickupAddress"`
+	TermsVersion         *string    `json:"termsVersion"`
+	TermsAcceptedAt      *time.Time `json:"termsAcceptedAt"`
+	SubmittedAt          *time.Time `json:"submittedAt"`
+	DecidedAt            *time.Time `json:"decidedAt"`
+	DecidedBy            *uuid.UUID `json:"decidedBy"`
+	IsPlatform           bool       `json:"isPlatform"`
+	VerifiedTag          bool       `json:"verifiedTag"`
+	CreatedAt            time.Time  `json:"createdAt"`
+	UpdatedAt            time.Time  `json:"updatedAt"`
+	Version              int32      `json:"version"`
+	InvoiceCounter       int32      `json:"invoiceCounter"`
+	Rolling12mSalesPaise int64      `json:"rolling12mSalesPaise"`
 }
 
 type Session struct {
@@ -1030,6 +1115,15 @@ type SubOrderEvent struct {
 	Actor      string    `json:"actor"`
 	Note       string    `json:"note"`
 	At         time.Time `json:"at"`
+}
+
+type SyntheticRun struct {
+	ID        uuid.UUID `json:"id"`
+	CheckName string    `json:"checkName"`
+	Ok        bool      `json:"ok"`
+	LatencyMs int32     `json:"latencyMs"`
+	Error     *string   `json:"error"`
+	At        time.Time `json:"at"`
 }
 
 type TrackingEvent struct {

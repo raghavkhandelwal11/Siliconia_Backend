@@ -452,6 +452,12 @@ func (s *Service) HandlePayoutWebhook(r *http.Request) error {
 		} else if err != nil {
 			return err
 		}
+		if strings.HasPrefix(e.Ref, "PO-") {
+			if s.SellerPayout == nil {
+				return fmt.Errorf("payout: no handler for seller payout %s", e.Ref)
+			}
+			return s.SellerPayout(ctx, tx, e)
+		}
 		c, err := q.GetCashoutByRefForUpdate(ctx, &e.Ref)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("payout: unknown ref %s", e.Ref)

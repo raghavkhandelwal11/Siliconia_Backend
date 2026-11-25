@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/admin"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
@@ -55,6 +56,7 @@ type Deps struct {
 	Notify      *notify.Handler
 	M3          *m3http.Handler
 	M4          *m4http.Handler
+	M5          *admin.Handler
 }
 
 // New returns the root handler.
@@ -112,6 +114,9 @@ func New(d Deps) http.Handler {
 		if d.M4 != nil {
 			d.M4.PublicRoutes(api)
 		}
+		if d.M5 != nil {
+			d.M5.PublicRoutes(api)
+		}
 		if d.Auth != nil {
 			api.Group(func(api chi.Router) {
 				api.Use(auth.Authenticate(d.AuthService), auth.CSRF)
@@ -148,6 +153,9 @@ func New(d Deps) http.Handler {
 				}
 				if d.M4 != nil {
 					d.M4.Routes(api)
+				}
+				if d.M5 != nil {
+					d.M5.Routes(api)
 				}
 
 			})
