@@ -17,6 +17,7 @@ const (
 	CookieAccess  = "sx_at"
 	CookieRefresh = "sx_rt"
 	CookieCSRF    = "sx_csrf"
+	CookieDevice  = "sx_dev" // guest cart (LLD 7.3)
 	HeaderCSRF    = "X-CSRF-Token"
 	refreshPath   = "/api/v1/auth"
 )
@@ -53,7 +54,8 @@ func Authenticate(s *Service) func(http.Handler) http.Handler {
 }
 
 // CSRF requires the double-submit token on state-changing requests that carry
-// session cookies (LLD 4.2). Requests without cookies (sign-in, webhooks) pass.
+// session or guest-cart cookies (LLD 4.2). Requests without them (sign-in,
+// webhooks, a guest's first cart write) pass.
 func CSRF(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -63,7 +65,8 @@ func CSRF(next http.Handler) http.Handler {
 		}
 		_, errAT := r.Cookie(CookieAccess)
 		_, errRT := r.Cookie(CookieRefresh)
-		if errAT != nil && errRT != nil { // neither session cookie present
+		_, errDev := r.Cookie(CookieDevice)
+		if errAT != nil && errRT != nil && errDev != nil { // no session or guest-cart cookie
 			next.ServeHTTP(w, r)
 			return
 		}

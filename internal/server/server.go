@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
@@ -35,6 +36,7 @@ type Deps struct {
 	Product     *product.Handler
 	Search      *search.Handler
 	PDP         *pdp.Handler
+	Cart        *cart.Handler
 }
 
 // New returns the root handler.
@@ -80,6 +82,9 @@ func New(d Deps) http.Handler {
 				}
 				if d.Product != nil {
 					d.Product.Routes(api)
+				}
+				if d.Cart != nil {
+					d.Cart.Routes(api)
 				}
 
 			})
