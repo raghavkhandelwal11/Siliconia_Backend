@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -654,6 +654,253 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /media/{key}:
+    get:
+      operationId: getMedia
+      summary: A stored product image (JPEG), cached for a year
+      tags: [catalogue]
+      security: []
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string }, description: "Storage key under products/, may contain slashes" }
+      responses:
+        "200":
+          description: The image
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/uploads/images:
+    post:
+      operationId: uploadProductImage
+      summary: Upload a product image (JPEG, PNG or WebP, up to 8 MB, at least 400 px)
+      description: The API decodes the image, scales it to at most 1600 px and stores it as JPEG, dropping EXIF data. 60 uploads an hour.
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Upload" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/products:
+    get:
+      operationId: listSellerProducts
+      summary: The seller's products, most recently changed first
+      tags: [seller]
+      responses:
+        "200":
+          description: Products
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [products]
+                properties:
+                  products: { type: array, items: { $ref: "#/components/schemas/ProductSummary" } }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    post:
+      operationId: createProduct
+      summary: Start a draft product in a sub-category (approved sellers only)
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [categoryId, name]
+              properties:
+                categoryId: { type: string, format: uuid }
+                name: { type: string, minLength: 3, maxLength: 150 }
+                brand: { type: string, maxLength: 60 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditor" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/products/{id}:
+    get:
+      operationId: getSellerProduct
+      summary: One product with variants, stock, images and what publishing still needs
+      tags: [seller]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditor" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    put:
+      operationId: updateProduct
+      summary: Save details and specifications (specs are checked against the category)
+      description: Send the version you loaded; a stale version gives 409 VERSION_CONFLICT. Invalid specs give 422 SPECS_INVALID with per-field messages.
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [categoryId, name, version]
+              properties:
+                categoryId: { type: string, format: uuid }
+                name: { type: string }
+                brand: { type: string }
+                model: { type: string }
+                description: { type: string, maxLength: 5000 }
+                warranty: { type: string, maxLength: 200 }
+                originCountry: { type: string, pattern: "^[A-Za-z]{2}$" }
+                isLocal: { type: boolean }
+                specs: { type: object, additionalProperties: true }
+                version: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditor" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/products/{id}/variants:
+    put:
+      operationId: saveVariants
+      summary: Replace the variant set with prices and stock
+      description: Variants with reserved or sold units cannot be removed, and stock cannot go below them.
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [variants]
+              properties:
+                variants: { type: array, minItems: 1, maxItems: 50, items: { $ref: "#/components/schemas/VariantInput" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditor" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/products/{id}/images:
+    put:
+      operationId: saveImages
+      summary: Set the image list in display order (the first is the cover)
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [images]
+              properties:
+                images:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [uploadId]
+                    properties:
+                      uploadId: { type: string, format: uuid }
+                      alt: { type: string, maxLength: 150 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditor" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /seller/products/{id}/status:
+    post:
+      operationId: setProductStatus
+      summary: Publish (ACTIVE), pause or resume a product
+      tags: [seller]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status: { type: string, enum: [ACTIVE, PAUSED] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductEditor" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
 components:
   securitySchemes:
     sessionCookie:
@@ -810,6 +1057,103 @@ components:
         hasGstin: { type: boolean }
         submittedAt: { type: string, format: date-time }
         decidedAt: { type: string, format: date-time }
+    Upload:
+      type: object
+      required: [id, url, width, height]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+    VariantInput:
+      type: object
+      additionalProperties: false
+      required: [sku, mrpPaise, pricePaise, stock]
+      properties:
+        id: { type: string, format: uuid, description: Omit for a new variant }
+        sku: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$" }
+        attrs: { type: object, additionalProperties: { type: string }, description: "Options such as Colour or Storage (up to 5)" }
+        mrpPaise: { type: integer, format: int64 }
+        pricePaise: { type: integer, format: int64 }
+        stock: { type: integer, minimum: 0, maximum: 100000 }
+    Variant:
+      type: object
+      required: [id, sku, attrs, mrpPaise, pricePaise, stock, reserved, sold]
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        attrs: { type: object, additionalProperties: { type: string } }
+        mrpPaise: { type: integer, format: int64 }
+        pricePaise: { type: integer, format: int64 }
+        stock: { type: integer }
+        reserved: { type: integer }
+        sold: { type: integer }
+    ProductImage:
+      type: object
+      required: [uploadId, url, width, height, alt]
+      properties:
+        uploadId: { type: string, format: uuid }
+        url: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        alt: { type: string }
+    FieldError:
+      type: object
+      required: [key, message]
+      properties:
+        key: { type: string }
+        message: { type: string }
+    ProductEditor:
+      type: object
+      required: [id, slug, status, category, specSchema, name, brand, model, description, warranty, originCountry, isLocal, specs, variants, images, missing, specProblems, version, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        status: { type: string, enum: [DRAFT, ACTIVE, PAUSED, HIDDEN] }
+        category:
+          type: object
+          required: [id, slug, name]
+          properties:
+            id: { type: string, format: uuid }
+            slug: { type: string }
+            name: { type: string }
+            parentName: { type: string }
+            parentIcon: { type: string }
+        specSchema: { $ref: "#/components/schemas/SpecSchema" }
+        name: { type: string }
+        brand: { type: string }
+        model: { type: string }
+        description: { type: string }
+        warranty: { type: string }
+        originCountry: { type: string }
+        isLocal: { type: boolean }
+        specs: { type: object, additionalProperties: true }
+        variants: { type: array, items: { $ref: "#/components/schemas/Variant" } }
+        images: { type: array, items: { $ref: "#/components/schemas/ProductImage" } }
+        missing:
+          type: array
+          description: What publishing still needs
+          items: { type: string, enum: [brand, description, warranty, specs, variants, images] }
+        specProblems: { type: array, items: { $ref: "#/components/schemas/FieldError" } }
+        version: { type: integer }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: string, format: date-time }
+    ProductSummary:
+      type: object
+      required: [id, slug, name, brand, status, categoryName, minPricePaise, maxPricePaise, variantCount, available, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        brand: { type: string }
+        status: { type: string, enum: [DRAFT, ACTIVE, PAUSED, HIDDEN] }
+        categoryName: { type: string }
+        minPricePaise: { type: integer, format: int64 }
+        maxPricePaise: { type: integer, format: int64 }
+        variantCount: { type: integer }
+        available: { type: integer }
+        coverUrl: { type: string }
+        updatedAt: { type: string, format: date-time }
     Health:
       type: object
       required: [status, version, mode]

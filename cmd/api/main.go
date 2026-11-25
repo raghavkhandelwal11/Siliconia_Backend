@@ -24,6 +24,8 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/logx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/redisx"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/storage"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/kyc"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
@@ -66,6 +68,15 @@ func main() {
 		log.Error("kyc", "err", "only PROVIDER_KYC=sim exists in this build (paid adapters: paid-later/)")
 		os.Exit(1)
 	}
+	media, err := storage.NewS3(ctx, storage.S3Config{
+		Endpoint: cfg.StorageEndpoint, AccessKey: cfg.StorageAccessKey, SecretKey: cfg.StorageSecretKey,
+		Bucket: cfg.StorageBucketMedia, Region: cfg.StorageRegion, UseSSL: cfg.StorageUseSSL,
+	})
+	if err != nil {
+		log.Error("storage", "err", err)
+		os.Exit(1)
+	}
+	products := &product.Service{Pool: pool, Q: authSvc.Q, Store: media, Limiter: limiter, Log: log}
 	sellers := &seller.Service{
 		Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL),
 		Limiter: limiter, Messages: authSvc.Messages, Log: log,
@@ -79,6 +90,7 @@ func main() {
 		Auth:           authHandler,
 		Catalogue:      &catalogue.Handler{Q: store.New(pool)},
 		Seller:         &seller.Handler{Svc: sellers},
+		Product:        &product.Handler{Svc: products},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,
