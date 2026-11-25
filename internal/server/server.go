@@ -13,6 +13,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
@@ -43,6 +44,7 @@ type Deps struct {
 	Payment     *payment.Handler
 	Checkout    *checkout.Handler
 	Shipping    *shipping.Handler
+	Orders      *orders.Handler
 }
 
 // New returns the root handler.
@@ -103,6 +105,9 @@ func New(d Deps) http.Handler {
 				}
 				if d.Shipping != nil {
 					d.Shipping.Routes(api)
+				}
+				if d.Orders != nil {
+					d.Orders.Routes(api)
 				}
 
 			})

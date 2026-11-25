@@ -20,6 +20,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
@@ -121,6 +122,7 @@ func main() {
 		Payment:        &payment.Handler{Svc: payments},
 		Checkout:       &checkout.Handler{Svc: checkouts},
 		Shipping:       &shipping.Handler{Svc: shipments},
+		Orders:         &orders.Handler{Svc: &orders.Service{Pool: pool, Q: authSvc.Q, Payments: payments, Log: log}},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,

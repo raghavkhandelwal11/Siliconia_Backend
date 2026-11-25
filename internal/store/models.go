@@ -533,6 +533,7 @@ type SellerProfile struct {
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
 	Version         int32      `json:"version"`
+	InvoiceCounter  int32      `json:"invoiceCounter"`
 }
 
 type Session struct {
@@ -578,6 +579,18 @@ type SubOrder struct {
 	SettledAt          *time.Time `json:"settledAt"`
 	Version            int32      `json:"version"`
 	CodCollectedPaise  int64      `json:"codCollectedPaise"`
+	CancelReason       *string    `json:"cancelReason"`
+	CancelledBy        *string    `json:"cancelledBy"`
+	InvoicedAt         *time.Time `json:"invoicedAt"`
+}
+
+type SubOrderEvent struct {
+	ID         uuid.UUID `json:"id"`
+	SubOrderID uuid.UUID `json:"subOrderId"`
+	Status     SubStatus `json:"status"`
+	Actor      string    `json:"actor"`
+	Note       string    `json:"note"`
+	At         time.Time `json:"at"`
 }
 
 type TrackingEvent struct {

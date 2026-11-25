@@ -134,7 +134,7 @@ func (q *Queries) GetShipmentByAWBForUpdate(ctx context.Context, awb string) (Sh
 }
 
 const getSubOrder = `-- name: GetSubOrder :one
-SELECT id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise FROM sub_orders WHERE id = $1
+SELECT id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at FROM sub_orders WHERE id = $1
 `
 
 func (q *Queries) GetSubOrder(ctx context.Context, id uuid.UUID) (SubOrder, error) {
@@ -152,6 +152,9 @@ func (q *Queries) GetSubOrder(ctx context.Context, id uuid.UUID) (SubOrder, erro
 		&i.SettledAt,
 		&i.Version,
 		&i.CodCollectedPaise,
+		&i.CancelReason,
+		&i.CancelledBy,
+		&i.InvoicedAt,
 	)
 	return i, err
 }
@@ -280,7 +283,7 @@ func (q *Queries) ListOrderTracking(ctx context.Context, orderID uuid.UUID) ([]L
 const markSubOrderDelivered = `-- name: MarkSubOrderDelivered :one
 UPDATE sub_orders SET status = 'DELIVERED', delivered_at = $1, return_window_ends_at = $2,
   cod_collected_paise = $3, version = version + 1
-WHERE id = $4 RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise
+WHERE id = $4 RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at
 `
 
 type MarkSubOrderDeliveredParams struct {
@@ -310,12 +313,15 @@ func (q *Queries) MarkSubOrderDelivered(ctx context.Context, arg MarkSubOrderDel
 		&i.SettledAt,
 		&i.Version,
 		&i.CodCollectedPaise,
+		&i.CancelReason,
+		&i.CancelledBy,
+		&i.InvoicedAt,
 	)
 	return i, err
 }
 
 const setSubOrderStatus = `-- name: SetSubOrderStatus :one
-UPDATE sub_orders SET status = $2, version = version + 1 WHERE id = $1 RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise
+UPDATE sub_orders SET status = $2, version = version + 1 WHERE id = $1 RETURNING id, order_id, seller_id, status, subtotal_paise, invoice_no, delivered_at, return_window_ends_at, settled_at, version, cod_collected_paise, cancel_reason, cancelled_by, invoiced_at
 `
 
 type SetSubOrderStatusParams struct {
@@ -338,6 +344,9 @@ func (q *Queries) SetSubOrderStatus(ctx context.Context, arg SetSubOrderStatusPa
 		&i.SettledAt,
 		&i.Version,
 		&i.CodCollectedPaise,
+		&i.CancelReason,
+		&i.CancelledBy,
+		&i.InvoicedAt,
 	)
 	return i, err
 }

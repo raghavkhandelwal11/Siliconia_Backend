@@ -29,6 +29,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/orders"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/crypto"
@@ -71,6 +72,7 @@ type env struct {
 	simURL string
 	ship   *shipping.Service
 	ships  *simship.Sim
+	ord    *orders.Service
 }
 
 func setup(t *testing.T) *env {
@@ -108,10 +110,11 @@ func setup(t *testing.T) *env {
 	ships := &shipping.Service{Pool: pool, Q: q, Log: log}
 	co := &checkout.Service{Pool: pool, Q: q, Payments: pays, PublicURL: "http://shop.test", Log: log, Shipping: ships}
 	pays.Hooks = map[string]payment.Hook{"ORDER": co.OnPayment}
+	ord := &orders.Service{Pool: pool, Q: q, Payments: pays, Log: log}
 	srv := httptest.NewServer(server.New(server.Deps{
 		Log: log, Health: &health.Handler{}, AuthService: authSvc, Auth: auth.NewHandler(authSvc, nil, false),
 		Cart:    &cart.Handler{Svc: &cart.Service{Pool: pool, Q: q}},
-		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships},
+		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships}, Orders: &orders.Handler{Svc: ord},
 	}))
 	t.Cleanup(srv.Close)
 	sim := simpay.New(simpay.Config{PublicURL: "http://shop.test", APIKey: "k", WebhookURL: srv.URL + "/api/v1/webhooks/payment",
@@ -125,7 +128,7 @@ func setup(t *testing.T) *env {
 	t.Cleanup(shipSrv.Close)
 	ships.Provider = shipprovider.NewSim(shipSrv.URL, "sk", shipSecret)
 	return &env{t: t, ctx: ctx, pool: pool, srv: srv, prods: &product.Service{Pool: pool, Q: q, Store: storage.NewMemory(), Log: log}, inbox: in, mr: mr,
-		co: co, sim: sim, simURL: simSrv.URL, ship: ships, ships: shipSim}
+		co: co, sim: sim, simURL: simSrv.URL, ship: ships, ships: shipSim, ord: ord}
 }
 
 // listed creates a live product with one variant and returns its variant ID.
@@ -581,5 +584,153 @@ func TestPinServiceability(t *testing.T) {
 	}
 	if res, _ := http.Get(e.srv.URL + "/api/v1/serviceability/12"); res.StatusCode != 400 {
 		t.Fatalf("bad PIN: %d", res.StatusCode)
+	}
+}
+
+func (c *client) raw(method, path string, body any) (*http.Response, []byte) {
+	c.e.t.Helper()
+	var r io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		r = bytes.NewReader(b)
+	}
+	req, _ := http.NewRequest(method, c.e.srv.URL+"/api/v1"+path, r)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(auth.HeaderCSRF, c.cookie(auth.CookieCSRF))
+	res, err := (&http.Client{Jar: c.jar}).Do(req)
+	if err != nil {
+		c.e.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	return res, b
+}
+
+func TestSellerFulfilmentTimelineAndInvoice(t *testing.T) {
+	e := setup(t)
+	bank, _, seller := e.listed("Volt Store", "Volt Cell", 279900, 5)
+	e.pickup(seller)
+	b, addr := e.buyer("9876511111")
+	o := e.placeCOD(b, addr, bank, "key-fulfil-01")
+	subID := uuid.MustParse(subOrder(o)["id"].(string))
+
+	queue, counts, err := e.ord.Queue(e.ctx, seller, "")
+	if err != nil || len(queue) != 1 || queue[0].Status != "CONFIRMED" || queue[0].BuyerName != "Asha Rao" || counts["CONFIRMED"] != 1 {
+		t.Fatalf("queue: %+v %v %v", queue, counts, err)
+	}
+	if _, _, err := e.ord.Queue(e.ctx, seller, "BOGUS"); err == nil {
+		t.Fatal("unknown status filter must fail")
+	}
+	if res, body := b.raw("GET", "/invoices/"+subID.String(), nil); res.StatusCode != 409 || !strings.Contains(string(body), "NO_INVOICE_YET") {
+		t.Fatalf("invoice before shipping: %d %s", res.StatusCode, body)
+	}
+	if err := e.ord.Pack(e.ctx, uuid.New(), subID); err == nil {
+		t.Fatal("another seller cannot pack")
+	}
+	if err := e.ord.Pack(e.ctx, seller, subID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.ord.Pack(e.ctx, seller, subID); err != orders.ErrCannotPack {
+		t.Fatalf("pack twice: %v", err)
+	}
+	d, err := e.ord.SellerDetail(e.ctx, seller, subID)
+	if err != nil || d.Status != "PACKED" || !d.CanShip || d.CanPack || len(d.Items) != 1 || d.Address.Phone == "" {
+		t.Fatalf("detail: %+v %v", d, err)
+	}
+	if _, err := e.ship.Ship(e.ctx, seller, subID, 300); err != nil {
+		t.Fatal(err)
+	}
+	e.ships.Wait()
+
+	res, pdf := b.raw("GET", "/invoices/"+subID.String(), nil)
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "application/pdf" || !strings.Contains(string(pdf), "TAX INVOICE") ||
+		!strings.Contains(string(pdf), "Not a valid tax invoice") || !strings.Contains(string(pdf), "Rs 2,799.00") {
+		t.Fatalf("invoice: %d %.300s", res.StatusCode, pdf)
+	}
+	inter := strings.Contains(string(pdf), "IGST") // Uttar Pradesh seller, Karnataka buyer
+	_, sellerPDF, err := e.ord.Invoice(e.ctx, orders.Viewer{ID: seller}, subID)
+	if err != nil || !inter {
+		t.Fatalf("seller invoice: %v inter=%v", err, inter)
+	}
+	var no string
+	_ = e.pool.QueryRow(e.ctx, `SELECT invoice_no FROM sub_orders WHERE id = $1`, subID).Scan(&no)
+	if sellerPDF != no || !strings.HasPrefix(no, "SX-") || !strings.HasSuffix(no, "/00001") {
+		t.Fatalf("one invoice number per sub-order: %q vs %q", sellerPDF, no)
+	}
+	other, _ := e.buyer("9876533333")
+	if res, _ := other.raw("GET", "/invoices/"+subID.String(), nil); res.StatusCode != 404 {
+		t.Fatalf("someone else's invoice: %d", res.StatusCode)
+	}
+
+	_, o = b.do("GET", "/orders/"+o["id"].(string), nil, false)
+	so := subOrder(o)
+	var steps []string
+	for _, ev := range so["events"].([]any) {
+		m := ev.(map[string]any)
+		steps = append(steps, m["status"].(string)+"/"+m["actor"].(string))
+	}
+	want := "CONFIRMED/BUYER,PACKED/SELLER,SHIPPED/SELLER,OUT_FOR_DELIVERY/COURIER,DELIVERED/COURIER"
+	if strings.Join(steps, ",") != want || so["hasInvoice"] != true || so["canCancel"] != false {
+		t.Fatalf("timeline: %v (want %s) %v", steps, want, so)
+	}
+}
+
+func TestBuyerCancelsBeforeShipping(t *testing.T) {
+	e := setup(t)
+	bank, _, seller := e.listed("Volt Store", "Volt Cell", 279900, 5)
+	e.pickup(seller)
+	b, addr := e.buyer("9876511111")
+
+	// Prepaid: cancelling refunds the payment and puts stock back.
+	b.do("PUT", "/cart/items/"+bank.String(), map[string]int{"qty": 2}, true)
+	q := b.quote(addr, "ONLINE")
+	_, o := b.doKey("POST", "/orders", map[string]any{"addressId": addr, "payMethod": "ONLINE", "quoteHash": q["quoteHash"]}, true, "key-cancel-01")
+	e.pay(o["payment"].(map[string]any)["checkoutUrl"].(string))
+	subID := subOrder(o)["id"].(string)
+	if r, s := e.lot(bank); r != 0 || s != 2 {
+		t.Fatalf("sold: %d %d", r, s)
+	}
+	if res, _ := b.raw("POST", "/sub-orders/"+subID+"/cancel", map[string]string{"reason": "x"}); res.StatusCode != 400 {
+		t.Fatalf("reason required: %d", res.StatusCode)
+	}
+	other, _ := e.buyer("9876533333")
+	if res, _ := other.raw("POST", "/sub-orders/"+subID+"/cancel", map[string]string{"reason": "Not mine"}); res.StatusCode != 404 {
+		t.Fatalf("someone else's order: %d", res.StatusCode)
+	}
+	if res, body := b.raw("POST", "/sub-orders/"+subID+"/cancel", map[string]string{"reason": "Ordered by mistake"}); res.StatusCode != 204 {
+		t.Fatalf("cancel: %d %s", res.StatusCode, body)
+	}
+	e.sim.Wait()
+	if r, s := e.lot(bank); r != 0 || s != 0 {
+		t.Fatalf("stock back on sale: %d %d", r, s)
+	}
+	var refund int64
+	var status string
+	if err := e.pool.QueryRow(e.ctx, `SELECT amount_paise, status FROM refunds WHERE ref = $1`, subID+"-CANCEL").Scan(&refund, &status); err != nil || refund != 559800 || status != "REFUNDED" {
+		t.Fatalf("refund: %d %s %v", refund, status, err)
+	}
+	_, o = b.do("GET", "/orders/"+o["id"].(string), nil, false)
+	if so := subOrder(o); so["status"] != "CANCELLED" || so["cancelReason"] != "Ordered by mistake" || so["items"].([]any)[0].(map[string]any)["status"] != "CANCELLED" {
+		t.Fatalf("cancelled: %v", so)
+	}
+	if res, _ := b.raw("POST", "/sub-orders/"+subID+"/cancel", map[string]string{"reason": "Again please"}); res.StatusCode != 409 {
+		t.Fatalf("cancel twice: %d", res.StatusCode)
+	}
+
+	// After shipping there is no cancelling.
+	o = e.placeCOD(b, addr, bank, "key-cancel-02")
+	shipped := uuid.MustParse(subOrder(o)["id"].(string))
+	if _, err := e.ship.Ship(e.ctx, seller, shipped, 0); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := b.raw("POST", "/sub-orders/"+shipped.String()+"/cancel", map[string]string{"reason": "Changed my mind"}); res.StatusCode != 409 {
+		t.Fatalf("cancel after shipping: %d", res.StatusCode)
+	}
+	e.ships.Wait()
+
+	// The seller can cancel a new order too (no refund for COD).
+	o = e.placeCOD(b, addr, bank, "key-cancel-03")
+	if err := e.ord.Cancel(e.ctx, orders.Actor{ID: seller, Role: "SELLER"}, uuid.MustParse(subOrder(o)["id"].(string)), "Out of stock at the warehouse"); err != nil {
+		t.Fatal(err)
 	}
 }

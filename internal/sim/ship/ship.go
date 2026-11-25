@@ -92,6 +92,7 @@ type Shipment struct {
 	CreatedAt time.Time       `json:"createdAt"`
 	Events    []TrackingEvent `json:"events"`
 	plan      []TrackingEvent // steps still to come, in order
+	gen       int             // bumped on every step; a timer only applies its own generation
 }
 
 // Event is a webhook body.
@@ -209,15 +210,11 @@ func (s *Sim) CreateShipment(req ShipmentRequest) (Shipment, error) {
 	sh.Events = []TrackingEvent{{Status: Manifested, Location: req.From.City, At: now}}
 	sh.plan = plan(req, buyerPin)
 	s.shipments[sh.AWB], s.byRef[key] = sh, sh.AWB
-	steps := len(sh.plan)
 	out := snapshot(sh)
 	s.mu.Unlock()
 
 	s.emit(out, out.Events[0])
-	for i := 1; i <= steps; i++ {
-		want := i
-		s.after(time.Duration(i)*s.cfg.Step, func() { s.step(out.AWB, want) })
-	}
+	s.schedule(out.AWB, 0)
 	return out, nil
 }
 
@@ -243,19 +240,28 @@ func plan(req ShipmentRequest, buyerPin string) []TrackingEvent {
 	return append(steps, ev(Delivered, to))
 }
 
-// step applies the n-th planned step (1-based) unless it was already applied
-// (Advance) or the shipment was cancelled.
-func (s *Sim) step(awb string, n int) {
+// schedule sets the single timer for a shipment's next step. Steps run one
+// after another, so a slow machine can delay them but never reorder them.
+func (s *Sim) schedule(awb string, gen int) {
+	s.after(s.cfg.Step, func() { s.step(awb, gen) })
+}
+
+// step applies the next planned step unless the shipment moved on since the
+// timer was set (Advance) or was cancelled.
+func (s *Sim) step(awb string, gen int) {
 	s.mu.Lock()
 	sh := s.shipments[awb]
-	if sh == nil || sh.Status == Cancelled || len(sh.Events) != n || len(sh.plan) == 0 {
+	if sh == nil || sh.Status == Cancelled || sh.gen != gen || len(sh.plan) == 0 {
 		s.mu.Unlock()
 		return
 	}
 	e := s.next(sh)
-	snap := snapshot(sh)
+	snap, more, next := snapshot(sh), len(sh.plan) > 0, sh.gen
 	s.mu.Unlock()
 	s.emit(snap, e)
+	if more {
+		s.schedule(awb, next)
+	}
 }
 
 // next moves the shipment one step on. Callers hold the lock.
@@ -265,6 +271,7 @@ func (s *Sim) next(sh *Shipment) TrackingEvent {
 	sh.plan = sh.plan[1:]
 	sh.Events = append(sh.Events, e)
 	sh.Status = e.Status
+	sh.gen++
 	return e
 }
 
@@ -281,9 +288,12 @@ func (s *Sim) Advance(awb string) (Shipment, error) {
 		return Shipment{}, ErrConflict
 	}
 	e := s.next(sh)
-	out := snapshot(sh)
+	out, more, next := snapshot(sh), len(sh.plan) > 0, sh.gen
 	s.mu.Unlock()
 	s.emit(out, e)
+	if more {
+		s.schedule(awb, next) // restart the clock from this step
+	}
 	return out, nil
 }
 
