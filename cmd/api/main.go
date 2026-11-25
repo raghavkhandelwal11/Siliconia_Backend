@@ -18,6 +18,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
@@ -89,6 +90,8 @@ func main() {
 	}
 	payments := &payment.Service{Pool: pool, Q: authSvc.Q, Log: log,
 		Provider: paymentprovider.NewSim(cfg.SimPayURL, cfg.SimPayAPIKey, []byte(cfg.SimPayWebhookSecret))}
+	checkouts := &checkout.Service{Pool: pool, Q: authSvc.Q, Payments: payments, PublicURL: cfg.PublicBaseURL, Log: log}
+	payments.Hooks = map[string]payment.Hook{"ORDER": checkouts.OnPayment}
 	products := &product.Service{Pool: pool, Q: authSvc.Q, Store: media, Limiter: limiter, Log: log}
 	sellers := &seller.Service{
 		Pool: pool, Q: authSvc.Q, Box: authSvc.Box, KYC: kyc.NewSim(cfg.SimKYCURL),
@@ -108,6 +111,7 @@ func main() {
 		PDP:            &pdp.Handler{Svc: &pdp.Service{Q: authSvc.Q, Search: searchSvc, Saved: carts.Saved}},
 		Cart:           &cart.Handler{Svc: carts, Limiter: limiter, Secure: cfg.CookieSecure},
 		Payment:        &payment.Handler{Svc: payments},
+		Checkout:       &checkout.Handler{Svc: checkouts},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,

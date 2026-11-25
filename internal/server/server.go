@@ -11,6 +11,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/cart"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/checkout"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/pdp"
@@ -39,6 +40,7 @@ type Deps struct {
 	PDP         *pdp.Handler
 	Cart        *cart.Handler
 	Payment     *payment.Handler
+	Checkout    *checkout.Handler
 }
 
 // New returns the root handler.
@@ -90,6 +92,9 @@ func New(d Deps) http.Handler {
 				}
 				if d.Cart != nil {
 					d.Cart.Routes(api)
+				}
+				if d.Checkout != nil {
+					d.Checkout.Routes(api)
 				}
 
 			})

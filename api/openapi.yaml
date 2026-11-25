@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 0.9.0
+  version: 1.0.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -1135,6 +1135,183 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /me/addresses:
+    get:
+      operationId: listAddresses
+      summary: The buyer's saved delivery addresses (default first, at most 10)
+      tags: [checkout]
+      responses:
+        "200":
+          description: Addresses
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, max]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/DeliveryAddress" } }
+                  max: { type: integer }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createAddress
+      summary: Save an address; the first one (or one marked default) becomes the default
+      tags: [checkout]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddressInput" }
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryAddress" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /me/addresses/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: updateAddress
+      summary: Change an address (past orders keep their snapshot)
+      tags: [checkout]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddressInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryAddress" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteAddress
+      summary: Delete an address
+      tags: [checkout]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/Error" }
+  /checkout/quote:
+    post:
+      operationId: quoteCheckout
+      summary: Price the cart for an address and pay method (UI-BUY-02)
+      description: |
+        Re-prices every line from live data. Send the returned `quoteHash` with POST /orders; if prices,
+        stock, address or pay method change in between, placing the order fails with QUOTE_CHANGED.
+        Shipping is free in the prototype. COD is offered up to `codLimitPaise`.
+      tags: [checkout]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                addressId: { type: string, format: uuid }
+                payMethod: { type: string, enum: [ONLINE, COD] }
+      responses:
+        "200":
+          description: The quote
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Quote" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /orders:
+    get:
+      operationId: listOrders
+      summary: The buyer's orders, newest first
+      tags: [orders]
+      responses:
+        "200":
+          description: Orders
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/OrderSummary" } }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: placeOrder
+      summary: Place the order from the cart (UI-BUY-03)
+      description: |
+        Reserves stock in the same transaction (never oversells) and clears the cart. COD orders are CONFIRMED
+        at once. ONLINE orders wait in PENDING_PAYMENT for `checkout.hold_minutes` (10) with
+        `payment.checkoutUrl` to the payment page; unpaid orders expire and release their stock, and a payment
+        that arrives after expiry is refunded in full. The same Idempotency-Key returns the same order.
+      tags: [orders]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 100 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [addressId, payMethod, quoteHash]
+              properties:
+                addressId: { type: string, format: uuid }
+                payMethod: { type: string, enum: [ONLINE, COD] }
+                quoteHash: { type: string }
+      responses:
+        "201":
+          description: Placed (or the earlier result for this key)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      summary: One of the buyer's orders
+      tags: [orders]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/Error" }
+  /orders/{id}/pay:
+    post:
+      operationId: payOrder
+      summary: Get the payment page again for an order waiting for payment
+      tags: [orders]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Where to pay
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checkoutUrl]
+                properties:
+                  checkoutUrl: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /webhooks/payment:
     post:
       operationId: paymentWebhook
@@ -1665,6 +1842,127 @@ components:
         code: { type: string }
         detail: { type: string }
         requestId: { type: string }
+    AddressInput:
+      type: object
+      required: [name, phone, line1, city, state, pincode]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 80 }
+        phone: { type: string, description: Indian mobile number; +91 and spaces are ignored }
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string, pattern: "^[1-9][0-9]{5}$" }
+        isDefault: { type: boolean }
+    DeliveryAddress:
+      type: object
+      required: [id, name, phone, line1, line2, city, state, pincode, isDefault]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        phone: { type: string }
+        line1: { type: string }
+        line2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+        isDefault: { type: boolean }
+    QuoteLine:
+      type: object
+      required: [variantId, name, slug, attrs, qty, unitPricePaise, unitMrpPaise, lineTotalPaise]
+      properties:
+        variantId: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        coverUrl: { type: string }
+        attrs: { type: object, additionalProperties: { type: string } }
+        qty: { type: integer }
+        unitPricePaise: { type: integer, format: int64 }
+        unitMrpPaise: { type: integer, format: int64 }
+        lineTotalPaise: { type: integer, format: int64 }
+        problem: { type: string, enum: [UNAVAILABLE, OUT_OF_STOCK, LOW_STOCK] }
+    Quote:
+      type: object
+      required: [groups, itemCount, itemTotalPaise, mrpTotalPaise, savingsPaise, shippingPaise, payablePaise, codEligible, codLimitPaise, electronsNonMember, electronsMember, quoteHash, canPlace]
+      properties:
+        groups:
+          type: array
+          items:
+            type: object
+            required: [storeName, lines, subtotalPaise]
+            properties:
+              storeName: { type: string }
+              lines: { type: array, items: { $ref: "#/components/schemas/QuoteLine" } }
+              subtotalPaise: { type: integer, format: int64 }
+        itemCount: { type: integer }
+        itemTotalPaise: { type: integer, format: int64 }
+        mrpTotalPaise: { type: integer, format: int64 }
+        savingsPaise: { type: integer, format: int64 }
+        shippingPaise: { type: integer, format: int64 }
+        payablePaise: { type: integer, format: int64 }
+        codEligible: { type: boolean }
+        codLimitPaise: { type: integer, format: int64 }
+        electronsNonMember: { type: integer }
+        electronsMember: { type: integer }
+        quoteHash: { type: string }
+        canPlace: { type: boolean }
+        address: { $ref: "#/components/schemas/DeliveryAddress" }
+    OrderItem:
+      type: object
+      required: [name, slug, attrs, qty, unitPricePaise, unitMrpPaise, lineTotalPaise]
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        coverUrl: { type: string }
+        attrs: { type: object, additionalProperties: { type: string } }
+        qty: { type: integer }
+        unitPricePaise: { type: integer, format: int64 }
+        unitMrpPaise: { type: integer, format: int64 }
+        lineTotalPaise: { type: integer, format: int64 }
+    Order:
+      type: object
+      required: [id, number, status, payMethod, placedAt, expiresAt, address, itemTotalPaise, mrpTotalPaise, shippingPaise, payablePaise, subOrders]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, examples: [SX-261125-K7Q2M] }
+        status: { type: string, enum: [PENDING_PAYMENT, CONFIRMED, EXPIRED, CLOSED] }
+        payMethod: { type: string, enum: [ONLINE, COD, ELECTRONS_ONLY] }
+        placedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        address: { $ref: "#/components/schemas/DeliveryAddress" }
+        itemTotalPaise: { type: integer, format: int64 }
+        mrpTotalPaise: { type: integer, format: int64 }
+        shippingPaise: { type: integer, format: int64 }
+        payablePaise: { type: integer, format: int64 }
+        subOrders:
+          type: array
+          items:
+            type: object
+            required: [id, storeName, status, subtotalPaise, items]
+            properties:
+              id: { type: string, format: uuid }
+              storeName: { type: string }
+              status: { type: string, enum: [PENDING_PAYMENT, CONFIRMED, PACKED, SHIPPED, OUT_FOR_DELIVERY, DELIVERED, EXPIRED, CANCELLED, RTO] }
+              subtotalPaise: { type: integer, format: int64 }
+              items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
+        payment:
+          type: object
+          required: [status]
+          properties:
+            status: { type: string, enum: [CREATED, PENDING, CAPTURED, FAILED, EXPIRED] }
+            failureCode: { type: string }
+            checkoutUrl: { type: string, description: Present while the order can still be paid }
+    OrderSummary:
+      type: object
+      required: [id, number, status, payablePaise, placedAt, itemCount]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { type: string }
+        payablePaise: { type: integer, format: int64 }
+        placedAt: { type: string, format: date-time }
+        itemCount: { type: integer }
+        coverUrl: { type: string }
   responses:
     Error:
       description: Problem details (see code)

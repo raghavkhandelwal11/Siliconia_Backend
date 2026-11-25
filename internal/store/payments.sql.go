@@ -14,7 +14,7 @@ import (
 const createPayment = `-- name: CreatePayment :one
 INSERT INTO payments (id, purpose, ref, account_id, provider, amount_paise)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at
+RETURNING id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at, checkout_url
 `
 
 type CreatePaymentParams struct {
@@ -52,6 +52,7 @@ func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (P
 		&i.CapturedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckoutUrl,
 	)
 	return i, err
 }
@@ -97,7 +98,7 @@ func (q *Queries) CreateRefund(ctx context.Context, arg CreateRefundParams) (Ref
 }
 
 const getPayment = `-- name: GetPayment :one
-SELECT id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at FROM payments WHERE id = $1
+SELECT id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at, checkout_url FROM payments WHERE id = $1
 `
 
 func (q *Queries) GetPayment(ctx context.Context, id uuid.UUID) (Payment, error) {
@@ -119,12 +120,13 @@ func (q *Queries) GetPayment(ctx context.Context, id uuid.UUID) (Payment, error)
 		&i.CapturedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckoutUrl,
 	)
 	return i, err
 }
 
 const getPaymentByProviderOrder = `-- name: GetPaymentByProviderOrder :one
-SELECT id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at FROM payments WHERE provider_order_id = $1 FOR UPDATE
+SELECT id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at, checkout_url FROM payments WHERE provider_order_id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetPaymentByProviderOrder(ctx context.Context, providerOrderID *string) (Payment, error) {
@@ -146,12 +148,13 @@ func (q *Queries) GetPaymentByProviderOrder(ctx context.Context, providerOrderID
 		&i.CapturedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckoutUrl,
 	)
 	return i, err
 }
 
 const getPaymentByRef = `-- name: GetPaymentByRef :one
-SELECT id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at FROM payments WHERE ref = $1
+SELECT id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at, checkout_url FROM payments WHERE ref = $1
 `
 
 func (q *Queries) GetPaymentByRef(ctx context.Context, ref string) (Payment, error) {
@@ -173,6 +176,7 @@ func (q *Queries) GetPaymentByRef(ctx context.Context, ref string) (Payment, err
 		&i.CapturedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckoutUrl,
 	)
 	return i, err
 }
@@ -182,7 +186,7 @@ UPDATE payments
 SET status = 'CAPTURED', provider_payment_id = $2, method = $3, mandate_id = $4, captured_at = coalesce(captured_at, now()),
     failure_code = NULL, updated_at = now()
 WHERE id = $1 AND status <> 'CAPTURED'
-RETURNING id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at
+RETURNING id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at, checkout_url
 `
 
 type MarkPaymentCapturedParams struct {
@@ -217,6 +221,7 @@ func (q *Queries) MarkPaymentCaptured(ctx context.Context, arg MarkPaymentCaptur
 		&i.CapturedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckoutUrl,
 	)
 	return i, err
 }
@@ -224,7 +229,7 @@ func (q *Queries) MarkPaymentCaptured(ctx context.Context, arg MarkPaymentCaptur
 const markPaymentFailed = `-- name: MarkPaymentFailed :one
 UPDATE payments SET status = 'FAILED', provider_payment_id = $2, method = $3, failure_code = $4, updated_at = now()
 WHERE id = $1 AND status IN ('CREATED', 'PENDING')
-RETURNING id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at
+RETURNING id, purpose, ref, account_id, provider, provider_order_id, provider_payment_id, method, amount_paise, status, failure_code, mandate_id, captured_at, created_at, updated_at, checkout_url
 `
 
 type MarkPaymentFailedParams struct {
@@ -258,6 +263,7 @@ func (q *Queries) MarkPaymentFailed(ctx context.Context, arg MarkPaymentFailedPa
 		&i.CapturedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CheckoutUrl,
 	)
 	return i, err
 }

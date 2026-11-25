@@ -63,7 +63,11 @@ type Periodic struct {
 // (reservation sweeper, Electrons maturation, payouts and so on).
 var Schedule = []Periodic{
 	{Spec: "@every 1m", Type: TypeHeartbeat, Queue: QueueLow},
+	{Spec: "@every 30s", Type: TypeExpireOrders, Queue: QueueCritical},
 }
 
 // TypeHeartbeat proves the scheduler and worker are alive.
 const TypeHeartbeat = "system:heartbeat"
+
+// TypeExpireOrders expires unpaid orders and releases their stock (LLD 8.3).
+const TypeExpireOrders = "orders:expire"
