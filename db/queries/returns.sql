@@ -1,6 +1,6 @@
 -- name: GetItemForReturn :one
 -- The item with its sub-order, locked while a return is requested.
-SELECT i.id, i.status AS item_status, i.line_total_paise, i.variant_id, i.lot_id, i.qty, i.product_name, i.variant_attrs, i.cover_key,
+SELECT i.id, i.status AS item_status, i.line_total_paise, i.electrons_spent, i.variant_id, i.lot_id, i.qty, i.product_name, i.variant_attrs, i.cover_key,
        s.id AS sub_order_id, s.status AS sub_status, s.return_window_ends_at, s.seller_id, s.order_id,
        o.buyer_id, o.pay_method, o.payment_id, o.number AS order_number
 FROM order_items i

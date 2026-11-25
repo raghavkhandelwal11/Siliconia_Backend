@@ -324,7 +324,7 @@ func (q *Queries) GetIssueForUpdate(ctx context.Context, id uuid.UUID) (Issue, e
 }
 
 const getItemForReturn = `-- name: GetItemForReturn :one
-SELECT i.id, i.status AS item_status, i.line_total_paise, i.variant_id, i.lot_id, i.qty, i.product_name, i.variant_attrs, i.cover_key,
+SELECT i.id, i.status AS item_status, i.line_total_paise, i.electrons_spent, i.variant_id, i.lot_id, i.qty, i.product_name, i.variant_attrs, i.cover_key,
        s.id AS sub_order_id, s.status AS sub_status, s.return_window_ends_at, s.seller_id, s.order_id,
        o.buyer_id, o.pay_method, o.payment_id, o.number AS order_number
 FROM order_items i
@@ -338,6 +338,7 @@ type GetItemForReturnRow struct {
 	ID                 uuid.UUID  `json:"id"`
 	ItemStatus         string     `json:"itemStatus"`
 	LineTotalPaise     int64      `json:"lineTotalPaise"`
+	ElectronsSpent     int32      `json:"electronsSpent"`
 	VariantID          uuid.UUID  `json:"variantId"`
 	LotID              uuid.UUID  `json:"lotId"`
 	Qty                int32      `json:"qty"`
@@ -363,6 +364,7 @@ func (q *Queries) GetItemForReturn(ctx context.Context, id uuid.UUID) (GetItemFo
 		&i.ID,
 		&i.ItemStatus,
 		&i.LineTotalPaise,
+		&i.ElectronsSpent,
 		&i.VariantID,
 		&i.LotID,
 		&i.Qty,

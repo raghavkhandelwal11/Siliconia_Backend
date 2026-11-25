@@ -65,6 +65,11 @@ var Schedule = []Periodic{
 	{Spec: "@every 1m", Type: TypeHeartbeat, Queue: QueueLow},
 	{Spec: "@every 30s", Type: TypeExpireOrders, Queue: QueueCritical},
 	{Spec: "15 3 * * *", Type: TypeCloseIssues, Queue: QueueLow},
+	{Spec: "5 * * * *", Type: TypeMatureElectrons, Queue: QueueDefault},
+	{Spec: "0 1 * * *", Type: TypeExpireElectrons, Queue: QueueDefault},
+	{Spec: "0 9 * * *", Type: TypeRenewMemberships, Queue: QueueCritical},
+	{Spec: "@every 5s", Type: TypeLaunchTick, Queue: QueueCritical},
+	{Spec: "@every 1s", Type: TypeLaunchAdmit, Queue: QueueCritical},
 }
 
 // TypeHeartbeat proves the scheduler and worker are alive.
@@ -72,6 +77,15 @@ const TypeHeartbeat = "system:heartbeat"
 
 // TypeExpireOrders expires unpaid orders and releases their stock (LLD 8.3).
 const TypeExpireOrders = "orders:expire"
+
+// M3 jobs (LLD 11).
+const (
+	TypeMatureElectrons  = "electrons:mature"
+	TypeExpireElectrons  = "electrons:expire"
+	TypeRenewMemberships = "membership:renew"
+	TypeLaunchTick       = "launches:tick"
+	TypeLaunchAdmit      = "launches:admit"
+)
 
 // TypeCloseIssues closes issues resolved more than 7 days ago (LLD 10).
 const TypeCloseIssues = "issues:close-resolved"

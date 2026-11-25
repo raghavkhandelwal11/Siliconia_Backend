@@ -81,6 +81,33 @@ func (s *Service) Start(ctx context.Context, purpose, ref string, account *uuid.
 	return Checkout{PaymentID: p.ID, CheckoutURL: o.CheckoutURL}, nil
 }
 
+// ChargeMandate collects a renewal through a standing mandate. The capture
+// arrives by webhook like any other payment (purpose RENEWAL).
+func (s *Service) ChargeMandate(ctx context.Context, purpose, ref string, account *uuid.UUID, amount int64, mandateID string) (uuid.UUID, error) {
+	p, err := s.Q.GetPaymentByRef(ctx, ref)
+	if errors.Is(err, pgx.ErrNoRows) {
+		id, _ := uuid.NewV7()
+		p, err = s.Q.CreatePayment(ctx, store.CreatePaymentParams{ID: id, Purpose: purpose, Ref: ref, AccountID: account, Provider: s.Provider.Name(), AmountPaise: amount})
+	}
+	if err != nil {
+		return uuid.Nil, err
+	}
+	st, err := s.Provider.ChargeMandate(ctx, mandateID, amount, ref)
+	if err != nil {
+		s.Log.Error("mandate charge", "ref", ref, "err", err)
+		return p.ID, ErrPaymentDown
+	}
+	return p.ID, s.Q.SetProviderOrder(ctx, store.SetProviderOrderParams{ID: p.ID, ProviderOrderID: &st.ProviderOrderID})
+}
+
+// RevokeMandate stops future renewals at the provider.
+func (s *Service) RevokeMandate(ctx context.Context, mandateID string) error {
+	if err := s.Provider.RevokeMandate(ctx, mandateID); err != nil && !errors.Is(err, provider.ErrRejected) {
+		return ErrPaymentDown
+	}
+	return nil
+}
+
 // Refund sends money back for a captured payment.
 func (s *Service) Refund(ctx context.Context, paymentID uuid.UUID, amount int64, electrons int32, ref, reason string) (store.Refund, error) {
 	p, err := s.Q.GetPayment(ctx, paymentID)

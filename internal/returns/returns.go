@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/electrons"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
@@ -353,7 +354,14 @@ func (s *Service) receive(ctx context.Context, tx pgx.Tx, q *store.Queries, r st
 	if err := q.SetOrderItemStatus(ctx, store.SetOrderItemStatusParams{ID: it.ID, Status: "RETURNED"}); err != nil {
 		return nil, err
 	}
-	amount := it.LineTotalPaise
+	if err := electrons.ReverseItem(ctx, q, it.BuyerID, it.ID); err != nil {
+		return nil, err
+	}
+	// Electrons spent on the item come back; the refund is the money part (LLD 8.6).
+	if _, err := electrons.Restore(ctx, q, it.BuyerID, electrons.RefOrder, it.OrderID, it.ElectronsSpent, "Return "+r.Number); err != nil {
+		return nil, err
+	}
+	amount := it.LineTotalPaise - int64(it.ElectronsSpent)*100
 	var status, note string
 	switch {
 	case amount == 0:

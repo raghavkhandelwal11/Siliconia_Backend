@@ -307,8 +307,21 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, q *store.Queries, e prov
 	}
 	if next == store.SubStatusDELIVERED {
 		days := returnDays(ctx, q)
+		windowEnd := e.At.Add(time.Duration(days) * 24 * time.Hour)
 		if _, err := q.MarkSubOrderDelivered(ctx, store.MarkSubOrderDeliveredParams{ID: so.ID, DeliveredAt: &e.At,
-			ReturnWindowEndsAt: ptr(e.At.Add(time.Duration(days) * 24 * time.Hour)), CodCollectedPaise: sh.CodAmountPaise}); err != nil {
+			ReturnWindowEndsAt: &windowEnd, CodCollectedPaise: sh.CodAmountPaise}); err != nil {
+			return err
+		}
+		// Earned Electrons become available when the return window closes (LLD 8.7).
+		items, err := q.ListSubOrderItems(ctx, so.ID)
+		if err != nil {
+			return err
+		}
+		ids := make([]uuid.UUID, len(items))
+		for i, it := range items {
+			ids[i] = it.ID
+		}
+		if err := q.SetLotAvailableAt(ctx, store.SetLotAvailableAtParams{AvailableAt: windowEnd, Items: ids}); err != nil {
 			return err
 		}
 	} else if _, err := q.SetSubOrderStatus(ctx, store.SetSubOrderStatusParams{ID: so.ID, Status: next}); err != nil {
@@ -328,5 +341,3 @@ func returnDays(ctx context.Context, q *store.Queries) int64 {
 	}
 	return 7
 }
-
-func ptr[T any](v T) *T { return &v }

@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/electrons"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/payment"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/db"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
@@ -253,6 +254,7 @@ func (s *Service) Cancel(ctx context.Context, by Actor, id uuid.UUID, reason str
 		if err != nil {
 			return err
 		}
+		var spent int32
 		for _, it := range items {
 			if it.Status != "ACTIVE" {
 				continue
@@ -260,12 +262,21 @@ func (s *Service) Cancel(ctx context.Context, by Actor, id uuid.UUID, reason str
 			if err := q.ReturnSoldStock(ctx, store.ReturnSoldStockParams{ID: it.LotID, Qty: it.Qty}); err != nil {
 				return err
 			}
+			if err := electrons.ReverseItem(ctx, q, d.BuyerID, it.ID); err != nil {
+				return err
+			}
+			spent += it.ElectronsSpent
 		}
+		// Electrons paid for these items come back; only the money part is refunded.
+		if _, err := electrons.Restore(ctx, q, d.BuyerID, electrons.RefOrder, d.OrderID, spent, "Order cancelled"); err != nil {
+			return err
+		}
+		money := d.SubtotalPaise - int64(spent)*100
 		if err := q.SetOrderItemsStatus(ctx, store.SetOrderItemsStatusParams{SubOrderID: id, Status: "CANCELLED"}); err != nil {
 			return err
 		}
-		if d.PayMethod == "ONLINE" && d.PaymentID != nil {
-			paymentID, amount, ref := *d.PaymentID, d.SubtotalPaise, id.String()+"-CANCEL"
+		if d.PayMethod == "ONLINE" && d.PaymentID != nil && money > 0 {
+			paymentID, amount, ref := *d.PaymentID, money, id.String()+"-CANCEL"
 			refund = func(ctx context.Context) {
 				if _, err := s.Payments.Refund(ctx, paymentID, amount, 0, ref, "Order cancelled before shipping"); err != nil {
 					s.Log.Error("cancellation refund failed", "subOrder", id, "err", err)

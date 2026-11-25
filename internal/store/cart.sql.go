@@ -34,7 +34,7 @@ SELECT ci.variant_id, ci.qty, ci.price_at_add_paise, ci.added_at,
        p.id AS product_id, p.slug, p.name, p.brand, p.status AS product_status, p.seller_id,
        sp.store_name,
        (a.status = 'ACTIVE' AND a.approval = 'APPROVED' AND p.status = 'ACTIVE') AS buyable,
-       coalesce((SELECT sum(l.quantity - l.reserved - l.sold) FROM inventory_lots l WHERE l.variant_id = v.id), 0)::int AS available,
+       coalesce((SELECT sum(l.quantity - l.reserved - l.sold) FROM inventory_lots l WHERE l.variant_id = v.id AND l.kind = 'SELLER'), 0)::int AS available,
        coalesce((SELECT u.storage_key FROM product_images i JOIN uploads u ON u.id = i.upload_id
                  WHERE i.product_id = p.id ORDER BY i.position LIMIT 1), '')::text AS cover
 FROM cart_items ci
@@ -157,7 +157,7 @@ func (q *Queries) DeleteCartItem(ctx context.Context, arg DeleteCartItemParams) 
 
 const getBuyableVariant = `-- name: GetBuyableVariant :one
 SELECT v.id, v.price_paise, v.product_id,
-       coalesce((SELECT sum(l.quantity - l.reserved - l.sold) FROM inventory_lots l WHERE l.variant_id = v.id), 0)::int AS available
+       coalesce((SELECT sum(l.quantity - l.reserved - l.sold) FROM inventory_lots l WHERE l.variant_id = v.id AND l.kind = 'SELLER'), 0)::int AS available
 FROM variants v
 JOIN products p ON p.id = v.product_id AND p.status = 'ACTIVE'
 JOIN accounts a ON a.id = p.seller_id AND a.status = 'ACTIVE' AND a.approval = 'APPROVED'
@@ -326,7 +326,7 @@ SELECT w.variant_id, w.price_at_add_paise, w.notify_stock, w.notify_price, w.cre
        v.attrs, v.price_paise, v.mrp_paise,
        p.slug, p.name, p.brand,
        (a.status = 'ACTIVE' AND a.approval = 'APPROVED' AND p.status = 'ACTIVE') AS buyable,
-       coalesce((SELECT sum(l.quantity - l.reserved - l.sold) FROM inventory_lots l WHERE l.variant_id = v.id), 0)::int AS available,
+       coalesce((SELECT sum(l.quantity - l.reserved - l.sold) FROM inventory_lots l WHERE l.variant_id = v.id AND l.kind = 'SELLER'), 0)::int AS available,
        coalesce((SELECT u.storage_key FROM product_images i JOIN uploads u ON u.id = i.upload_id
                  WHERE i.product_id = p.id ORDER BY i.position LIMIT 1), '')::text AS cover
 FROM wishlist_items w

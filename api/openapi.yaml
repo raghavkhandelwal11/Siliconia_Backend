@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 1.4.0
+  version: 1.5.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -1220,6 +1220,10 @@ paths:
               properties:
                 addressId: { type: string, format: uuid }
                 payMethod: { type: string, enum: [ONLINE, COD] }
+                electrons: { type: integer, minimum: 0 }
+                launchClaimId: { type: string, format: uuid, description: Buy held deal units instead of the cart }
+                launchId: { type: string, format: uuid, description: Buy launch stock at the normal price (with qty) }
+                qty: { type: integer }
       responses:
         "200":
           description: The quote
@@ -1268,6 +1272,10 @@ paths:
                 addressId: { type: string, format: uuid }
                 payMethod: { type: string, enum: [ONLINE, COD] }
                 quoteHash: { type: string }
+                electrons: { type: integer, minimum: 0 }
+                launchClaimId: { type: string, format: uuid }
+                launchId: { type: string, format: uuid }
+                qty: { type: integer }
       responses:
         "201":
           description: Placed (or the earlier result for this key)
@@ -1787,6 +1795,274 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/NotificationPrefs" }
         "400": { $ref: "#/components/responses/Error" }
+  /electrons:
+    get:
+      operationId: getElectrons
+      summary: Electrons balance (1 Electron = ₹1)
+      tags: [electrons]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ElectronsBalance" }
+  /electrons/ledger:
+    get:
+      operationId: getElectronsLedger
+      summary: Electrons history, newest first (50 per page)
+      tags: [electrons]
+      parameters:
+        - { name: before, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/LedgerEntry" } }
+  /membership:
+    get:
+      operationId: getMembership
+      summary: Electra Membership status
+      tags: [membership]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Membership" }
+    patch:
+      operationId: setAutoRenew
+      summary: Turn auto-renew off (revokes the mandate) or back on (needs a mandate)
+      tags: [membership]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [autoRenew]
+              properties:
+                autoRenew: { type: boolean }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Membership" }
+        "409": { $ref: "#/components/responses/Error" }
+  /membership/purchase:
+    post:
+      operationId: buyMembership
+      summary: Buy or renew a year; Electrons pay first, the rest on the payment page
+      tags: [membership]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                electrons: { type: integer, minimum: 0 }
+                autoRenew: { type: boolean, default: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MembershipCheckout" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /launches:
+    get:
+      operationId: listLaunches
+      summary: Scheduled, live and past launch deals
+      tags: [launches]
+      security: []
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/LaunchStatus" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaunchList" }
+  /launches/{id}:
+    get:
+      operationId: getLaunch
+      summary: A launch (with your claims and member status when signed in)
+      tags: [launches]
+      security: [{}, { sessionCookie: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Launch" }
+        "404": { $ref: "#/components/responses/Error" }
+  /launches/{id}/stream:
+    get:
+      operationId: streamLaunch
+      summary: "Server-sent events: `live` with {status, dealRemaining, held, normalAvailable} on every change"
+      tags: [launches]
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /launches/{id}/reserve:
+    post:
+      operationId: reserveLaunch
+      summary: Hold deal units for 10 minutes (members; Redis gate + conditional SQL, never oversells)
+      tags: [launches]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qty]
+              properties:
+                qty: { type: integer, minimum: 1, maximum: 10 }
+                admissionToken: { type: string }
+      responses:
+        "201":
+          description: Held
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaunchClaim" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "428": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /launches/{id}/queue:
+    post:
+      operationId: joinLaunchQueue
+      summary: Join the waiting room
+      tags: [launches]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueState" }
+    get:
+      operationId: launchQueueStatus
+      summary: Position, or an admission pass once admitted
+      tags: [launches]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueueState" }
+        "404": { $ref: "#/components/responses/Error" }
+  /launch-claims/{id}:
+    delete:
+      operationId: releaseClaim
+      summary: Give back a held claim
+      tags: [launches]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Released }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/launches:
+    get:
+      operationId: adminLaunches
+      summary: All launches including drafts
+      tags: [launches]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaunchList" }
+    post:
+      operationId: createLaunch
+      summary: Create a DRAFT launch (deal units computed, LLD 9.1)
+      tags: [launches]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LaunchDraft" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, dealUnits, dealPricePaise, status]
+                properties:
+                  id: { type: string, format: uuid }
+                  dealUnits: { type: integer }
+                  dealPricePaise: { type: integer, format: int64 }
+                  status: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /admin/launches/preview:
+    post:
+      operationId: previewLaunch
+      summary: Deal-unit calculator
+      tags: [launches]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LaunchDraft" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LaunchPreview" }
+        "422": { $ref: "#/components/responses/Error" }
+  /admin/launches/{id}/schedule:
+    post:
+      operationId: scheduleLaunch
+      summary: Book platform-owned launch stock and schedule
+      tags: [launches]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Scheduled }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/launches/{id}/cancel:
+    post:
+      operationId: cancelLaunch
+      summary: Cancel a draft or scheduled launch
+      tags: [launches]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Cancelled }
+        "409": { $ref: "#/components/responses/Error" }
   /webhooks/payment:
     post:
       operationId: paymentWebhook
@@ -2241,6 +2517,15 @@ components:
               electronsMember: { type: integer, format: int64 }
         viewer: { type: string, enum: [ANONYMOUS, BUYER, SELLER, PROMOTER, CREATOR, ADMIN] }
         isMember: { type: boolean }
+        launch:
+          type: object
+          required: [id, status, startsAt, dealPricePaise, dealRemaining]
+          properties:
+            id: { type: string, format: uuid }
+            status: { type: string }
+            startsAt: { type: string, format: date-time }
+            dealPricePaise: { type: integer, format: int64 }
+            dealRemaining: { type: integer }
         actions:
           type: array
           items:
@@ -2378,7 +2663,7 @@ components:
         problem: { type: string, enum: [UNAVAILABLE, OUT_OF_STOCK, LOW_STOCK] }
     Quote:
       type: object
-      required: [groups, itemCount, itemTotalPaise, mrpTotalPaise, savingsPaise, shippingPaise, payablePaise, codEligible, codLimitPaise, electronsNonMember, electronsMember, quoteHash, canPlace]
+      required: [groups, itemCount, itemTotalPaise, mrpTotalPaise, savingsPaise, shippingPaise, payablePaise, codEligible, codLimitPaise, electronsNonMember, electronsMember, quoteHash, canPlace, isMember, electronsAvailable, electronsMax, electronsUsed, electronsEarn, electronsOnly, launchDeal]
       properties:
         groups:
           type: array
@@ -2397,7 +2682,14 @@ components:
         payablePaise: { type: integer, format: int64 }
         codEligible: { type: boolean }
         codLimitPaise: { type: integer, format: int64 }
-        codReason: { type: string, enum: [OVER_LIMIT, PIN_NO_COD], description: Why cash on delivery is not offered }
+        codReason: { type: string, enum: [NOT_MEMBER, LAUNCH_DEAL, OVER_LIMIT, PIN_NO_COD], description: Why cash on delivery is not offered }
+        isMember: { type: boolean }
+        electronsAvailable: { type: integer }
+        electronsMax: { type: integer }
+        electronsUsed: { type: integer }
+        electronsEarn: { type: integer }
+        electronsOnly: { type: boolean }
+        launchDeal: { type: boolean }
         delivery:
           type: object
           required: [deliverable]
@@ -2642,6 +2934,140 @@ components:
         whatsapp: { type: boolean }
         email: { type: boolean }
         marketing: { type: boolean, description: Launch alerts and offers (opt-in) }
+    ElectronsBalance:
+      type: object
+      required: [available, pending]
+      properties:
+        available: { type: integer }
+        pending: { type: integer, description: "Earned, waiting for the return window to close" }
+        nextExpiry:
+          type: object
+          required: [amount, at]
+          properties:
+            amount: { type: integer }
+            at: { type: string, format: date-time }
+    LedgerEntry:
+      type: object
+      required: [id, type, amount, refType, refId, at]
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string }
+        amount: { type: integer }
+        refType: { type: string }
+        refId: { type: string, format: uuid }
+        note: { type: string }
+        at: { type: string, format: date-time }
+    Membership:
+      type: object
+      required: [status, isMember, autoRenew, hasMandate, feePaise]
+      properties:
+        status: { type: string, enum: [NONE, ACTIVE, LAPSED] }
+        isMember: { type: boolean }
+        expiresAt: { type: string, format: date-time }
+        autoRenew: { type: boolean }
+        hasMandate: { type: boolean }
+        nextChargeAt: { type: string, format: date-time }
+        feePaise: { type: integer, format: int64 }
+        pending: { $ref: "#/components/schemas/MembershipCheckout" }
+    MembershipCheckout:
+      type: object
+      required: [purchaseId, status]
+      properties:
+        purchaseId: { type: string, format: uuid }
+        checkoutUrl: { type: string }
+        status: { type: string, enum: [ACTIVE, PENDING_PAYMENT] }
+    LaunchStatus:
+      type: string
+      enum: [DRAFT, SCHEDULED, LIVE, DEAL_SOLD_OUT, NORMAL_ON_SALE, COMPLETED, CANCELLED]
+    LaunchSummary:
+      type: object
+      required: [id, productName, productSlug, status, startsAt, dealPricePaise, normalPricePaise, dealUnits, dealRemaining]
+      properties:
+        id: { type: string, format: uuid }
+        productName: { type: string }
+        productSlug: { type: string }
+        coverUrl: { type: string }
+        status: { $ref: "#/components/schemas/LaunchStatus" }
+        startsAt: { type: string, format: date-time }
+        dealPricePaise: { type: integer, format: int64 }
+        normalPricePaise: { type: integer, format: int64 }
+        dealUnits: { type: integer }
+        dealRemaining: { type: integer }
+    LaunchList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/LaunchSummary" } }
+    LaunchClaim:
+      type: object
+      required: [id, launchId, qty, status, heldUntil]
+      properties:
+        id: { type: string, format: uuid }
+        launchId: { type: string, format: uuid }
+        qty: { type: integer }
+        status: { type: string, enum: [HELD, ORDERED, PAID, RELEASED] }
+        heldUntil: { type: string, format: date-time }
+    Launch:
+      type: object
+      required: [id, productName, productSlug, attrs, status, startsAt, mrpPaise, normalPricePaise, dealPricePaise, dealDiscountBps, dealUnits, dealRemaining, held, normalAvailable, perMemberLimit, waitingRoom, serverTime, isMember]
+      properties:
+        id: { type: string, format: uuid }
+        productName: { type: string }
+        productSlug: { type: string }
+        coverUrl: { type: string }
+        attrs: { type: object, additionalProperties: { type: string } }
+        status: { $ref: "#/components/schemas/LaunchStatus" }
+        startsAt: { type: string, format: date-time }
+        normalSaleAt: { type: string, format: date-time }
+        mrpPaise: { type: integer, format: int64 }
+        normalPricePaise: { type: integer, format: int64 }
+        dealPricePaise: { type: integer, format: int64 }
+        dealDiscountBps: { type: integer }
+        dealUnits: { type: integer }
+        dealRemaining: { type: integer }
+        held: { type: integer }
+        normalAvailable: { type: integer }
+        perMemberLimit: { type: integer }
+        waitingRoom: { type: boolean }
+        serverTime: { type: string, format: date-time }
+        myClaims: { type: array, items: { $ref: "#/components/schemas/LaunchClaim" } }
+        isMember: { type: boolean }
+    QueueState:
+      type: object
+      required: [position, admitted]
+      properties:
+        position: { type: integer }
+        admitted: { type: boolean }
+        admissionToken: { type: string }
+    LaunchDraft:
+      type: object
+      required: [productId, variantId, sellerId, unitsBought, unitCostPaise, normalPricePaise, startsAt]
+      properties:
+        productId: { type: string, format: uuid }
+        variantId: { type: string, format: uuid }
+        sellerId: { type: string, format: uuid, description: A platform seller account }
+        unitsBought: { type: integer, minimum: 1 }
+        unitCostPaise: { type: integer, format: int64 }
+        normalPricePaise: { type: integer, format: int64 }
+        dealDiscountBps: { type: integer, description: Default from config (8000) }
+        minProfitBps: { type: integer, description: Default from config (400) }
+        perMemberLimit: { type: integer, minimum: 1, maximum: 10 }
+        startsAt: { type: string, format: date-time }
+        normalSaleMode: { type: string, enum: [IMMEDIATE, SCHEDULED] }
+        normalSaleAt: { type: string, format: date-time }
+        waitingRoomRps: { type: integer, minimum: 1 }
+    LaunchPreview:
+      type: object
+      required: [dealUnits, dealPricePaise, normalUnits, revenuePaise, costPaise, profitPaise, dealDiscountBps, minProfitBps]
+      properties:
+        dealUnits: { type: integer }
+        dealPricePaise: { type: integer, format: int64 }
+        normalUnits: { type: integer }
+        revenuePaise: { type: integer, format: int64 }
+        costPaise: { type: integer, format: int64 }
+        profitPaise: { type: integer, format: int64 }
+        dealDiscountBps: { type: integer }
+        minProfitBps: { type: integer }
   responses:
     Error:
       description: Problem details (see code)
