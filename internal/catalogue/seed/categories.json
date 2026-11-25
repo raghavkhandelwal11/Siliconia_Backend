@@ -1,0 +1,2897 @@
+{
+ "categories": [
+  {
+   "slug": "mobiles-tablets",
+   "name": "Mobiles & Tablets",
+   "icon": "phone",
+   "children": [
+    {
+     "slug": "smartphones",
+     "name": "Smartphones",
+     "examples": "5G phones, foldables",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "os",
+        "label": "Operating system",
+        "type": "enum",
+        "options": [
+         "Android",
+         "iOS"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "ram_gb",
+        "label": "RAM",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "storage_gb",
+        "label": "Storage",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "display_in",
+        "label": "Display size",
+        "type": "number",
+        "unit": "inch",
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "refresh_hz",
+        "label": "Refresh rate",
+        "type": "enum",
+        "unit": "Hz",
+        "options": [
+         "60",
+         "90",
+         "120",
+         "144",
+         "165"
+        ],
+        "filter": true
+       },
+       {
+        "key": "main_camera_mp",
+        "label": "Main camera",
+        "type": "number",
+        "unit": "MP",
+        "filter": true
+       },
+       {
+        "key": "battery_mah",
+        "label": "Battery",
+        "type": "number",
+        "unit": "mAh",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "charging_w",
+        "label": "Charging",
+        "type": "number",
+        "unit": "W",
+        "filter": true
+       },
+       {
+        "key": "has_5g",
+        "label": "5G",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "sim",
+        "label": "SIM type",
+        "type": "enum",
+        "options": [
+         "Single SIM",
+         "Dual SIM",
+         "Dual SIM + eSIM"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "feature-phones",
+     "name": "Feature phones",
+     "examples": "Keypad phones",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "dual_sim",
+        "label": "Dual SIM",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "battery_mah",
+        "label": "Battery",
+        "type": "number",
+        "unit": "mAh",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "volte",
+        "label": "4G / VoLTE",
+        "type": "boolean",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "display_in",
+        "label": "Display size",
+        "type": "number",
+        "unit": "inch"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "tablets",
+     "name": "Tablets",
+     "examples": "Android tablets, iPads",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "os",
+        "label": "Operating system",
+        "type": "enum",
+        "options": [
+         "Android",
+         "iPadOS",
+         "Windows",
+         "Other"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "display_in",
+        "label": "Display size",
+        "type": "number",
+        "unit": "inch",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "ram_gb",
+        "label": "RAM",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "storage_gb",
+        "label": "Storage",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "connectivity",
+        "label": "Connectivity",
+        "type": "enum",
+        "options": [
+         "Wi-Fi",
+         "Wi-Fi + Cellular"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "stylus",
+        "label": "Stylus support",
+        "type": "boolean",
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "mobile-accessories",
+     "name": "Mobile accessories",
+     "examples": "Chargers, cables, cases, screen guards, holders",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Charger",
+         "Cable",
+         "Case",
+         "Screen guard",
+         "Holder",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "compatible_with",
+        "label": "Compatible devices",
+        "type": "text",
+        "main": true
+       },
+       {
+        "key": "connector",
+        "label": "Connector",
+        "type": "enum",
+        "options": [
+         "USB-C",
+         "Lightning",
+         "Micro-USB",
+         "USB-A",
+         "None"
+        ],
+        "filter": true
+       },
+       {
+        "key": "wattage_w",
+        "label": "Wattage",
+        "type": "number",
+        "unit": "W",
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "power-banks",
+     "name": "Power banks",
+     "examples": "10,000–30,000 mAh banks",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "capacity_mah",
+        "label": "Capacity",
+        "type": "number",
+        "unit": "mAh",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "output_w",
+        "label": "Max output",
+        "type": "number",
+        "unit": "W",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "ports",
+        "label": "Ports",
+        "type": "multi",
+        "options": [
+         "USB-C",
+         "USB-A",
+         "Micro-USB",
+         "Wireless"
+        ],
+        "filter": true
+       },
+       {
+        "key": "fast_charge",
+        "label": "Fast-charge standard",
+        "type": "multi",
+        "options": [
+         "PD",
+         "QC",
+         "PPS",
+         "Other"
+        ],
+        "filter": true
+       },
+       {
+        "key": "weight_g",
+        "label": "Weight",
+        "type": "number",
+        "unit": "g"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "computers-laptops",
+   "name": "Computers & Laptops",
+   "icon": "laptop",
+   "children": [
+    {
+     "slug": "laptops",
+     "name": "Laptops",
+     "examples": "Ultrabooks, business, gaming laptops",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "processor",
+        "label": "Processor",
+        "type": "text",
+        "required": true,
+        "main": true
+       },
+       {
+        "key": "processor_brand",
+        "label": "Processor brand",
+        "type": "enum",
+        "options": [
+         "Intel",
+         "AMD",
+         "Apple",
+         "Qualcomm",
+         "MediaTek"
+        ],
+        "filter": true
+       },
+       {
+        "key": "ram_gb",
+        "label": "RAM",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "storage_type",
+        "label": "Storage type",
+        "type": "enum",
+        "options": [
+         "SSD",
+         "HDD",
+         "SSD + HDD",
+         "eMMC"
+        ],
+        "filter": true
+       },
+       {
+        "key": "storage_gb",
+        "label": "Storage",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "gpu",
+        "label": "Graphics",
+        "type": "text"
+       },
+       {
+        "key": "dedicated_gpu",
+        "label": "Dedicated graphics",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "display_in",
+        "label": "Display size",
+        "type": "number",
+        "unit": "inch",
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "resolution",
+        "label": "Resolution",
+        "type": "enum",
+        "options": [
+         "HD",
+         "Full HD",
+         "2K",
+         "2.5K",
+         "3K",
+         "4K"
+        ],
+        "filter": true
+       },
+       {
+        "key": "weight_kg",
+        "label": "Weight",
+        "type": "number",
+        "unit": "kg",
+        "filter": true
+       },
+       {
+        "key": "os",
+        "label": "Operating system",
+        "type": "enum",
+        "options": [
+         "Windows",
+         "macOS",
+         "ChromeOS",
+         "Linux",
+         "None"
+        ],
+        "filter": true
+       },
+       {
+        "key": "battery_h",
+        "label": "Battery life",
+        "type": "number",
+        "unit": "hours"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "desktops-mini-pcs",
+     "name": "Desktops & mini PCs",
+     "examples": "All-in-ones, mini PCs",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "processor",
+        "label": "Processor",
+        "type": "text",
+        "required": true,
+        "main": true
+       },
+       {
+        "key": "ram_gb",
+        "label": "RAM",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "storage_gb",
+        "label": "Storage",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "gpu",
+        "label": "Graphics",
+        "type": "text"
+       },
+       {
+        "key": "os",
+        "label": "Operating system",
+        "type": "enum",
+        "options": [
+         "Windows",
+         "macOS",
+         "Linux",
+         "None"
+        ],
+        "filter": true
+       },
+       {
+        "key": "form_factor",
+        "label": "Form factor",
+        "type": "enum",
+        "options": [
+         "Tower",
+         "All-in-one",
+         "Mini PC"
+        ],
+        "filter": true,
+        "main": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "monitors",
+     "name": "Monitors",
+     "examples": "Office, gaming, 4K monitors",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "size_in",
+        "label": "Screen size",
+        "type": "number",
+        "unit": "inch",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "resolution",
+        "label": "Resolution",
+        "type": "enum",
+        "options": [
+         "Full HD",
+         "2K QHD",
+         "4K UHD",
+         "5K",
+         "Ultrawide"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "refresh_hz",
+        "label": "Refresh rate",
+        "type": "number",
+        "unit": "Hz",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "panel",
+        "label": "Panel type",
+        "type": "enum",
+        "options": [
+         "IPS",
+         "VA",
+         "TN",
+         "OLED"
+        ],
+        "filter": true
+       },
+       {
+        "key": "ports",
+        "label": "Ports",
+        "type": "multi",
+        "options": [
+         "HDMI",
+         "DisplayPort",
+         "USB-C",
+         "VGA"
+        ],
+        "filter": true
+       },
+       {
+        "key": "hdr",
+        "label": "HDR",
+        "type": "boolean",
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "keyboards-mice",
+     "name": "Keyboards & mice",
+     "examples": "Mechanical keyboards, wireless mice",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Keyboard",
+         "Mouse",
+         "Combo"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "connectivity",
+        "label": "Connectivity",
+        "type": "enum",
+        "options": [
+         "Wired",
+         "Bluetooth",
+         "2.4 GHz wireless",
+         "Multi-mode"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "switch",
+        "label": "Switch type",
+        "type": "text"
+       },
+       {
+        "key": "layout",
+        "label": "Layout",
+        "type": "enum",
+        "options": [
+         "Full size",
+         "TKL",
+         "75%",
+         "65%",
+         "60%"
+        ],
+        "filter": true
+       },
+       {
+        "key": "dpi",
+        "label": "Max DPI",
+        "type": "number",
+        "unit": "DPI"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "storage",
+     "name": "Storage",
+     "examples": "SSDs, HDDs, pen drives, memory cards",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Internal SSD",
+         "External SSD",
+         "Internal HDD",
+         "External HDD",
+         "Pen drive",
+         "Memory card"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "capacity_gb",
+        "label": "Capacity",
+        "type": "number",
+        "unit": "GB",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "interface",
+        "label": "Interface",
+        "type": "enum",
+        "options": [
+         "NVMe PCIe 3.0",
+         "NVMe PCIe 4.0",
+         "NVMe PCIe 5.0",
+         "SATA",
+         "USB 3.2",
+         "USB-C",
+         "microSD",
+         "SD"
+        ],
+        "filter": true
+       },
+       {
+        "key": "read_mbps",
+        "label": "Read speed",
+        "type": "number",
+        "unit": "MB/s",
+        "main": true
+       },
+       {
+        "key": "write_mbps",
+        "label": "Write speed",
+        "type": "number",
+        "unit": "MB/s"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "networking",
+     "name": "Networking",
+     "examples": "Routers, mesh systems, switches, Wi-Fi adapters",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Router",
+         "Mesh system",
+         "Switch",
+         "Wi-Fi adapter",
+         "Range extender"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "wifi",
+        "label": "Wi-Fi standard",
+        "type": "enum",
+        "options": [
+         "Wi-Fi 5",
+         "Wi-Fi 6",
+         "Wi-Fi 6E",
+         "Wi-Fi 7",
+         "None"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "speed_mbps",
+        "label": "Max speed",
+        "type": "number",
+        "unit": "Mbps",
+        "main": true
+       },
+       {
+        "key": "bands",
+        "label": "Bands",
+        "type": "enum",
+        "options": [
+         "Single band",
+         "Dual band",
+         "Tri band"
+        ],
+        "filter": true
+       },
+       {
+        "key": "lan_ports",
+        "label": "LAN ports",
+        "type": "number"
+       },
+       {
+        "key": "coverage_sqft",
+        "label": "Coverage",
+        "type": "number",
+        "unit": "sq ft"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "printers-scanners",
+     "name": "Printers & scanners",
+     "examples": "Ink tank, laser, scanners",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Ink tank",
+         "Inkjet",
+         "Laser",
+         "Scanner"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "functions",
+        "label": "Functions",
+        "type": "multi",
+        "options": [
+         "Print",
+         "Scan",
+         "Copy",
+         "Fax"
+        ],
+        "filter": true
+       },
+       {
+        "key": "connectivity",
+        "label": "Connectivity",
+        "type": "multi",
+        "options": [
+         "USB",
+         "Wi-Fi",
+         "Ethernet",
+         "Bluetooth"
+        ],
+        "filter": true
+       },
+       {
+        "key": "colour",
+        "label": "Colour",
+        "type": "enum",
+        "options": [
+         "Colour",
+         "Mono"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "ppm",
+        "label": "Print speed",
+        "type": "number",
+        "unit": "pages/min"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "pc-components",
+     "name": "PC components",
+     "examples": "CPUs, GPUs, motherboards, RAM, PSUs, cabinets, coolers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "component",
+        "label": "Component type",
+        "type": "enum",
+        "options": [
+         "CPU",
+         "GPU",
+         "Motherboard",
+         "RAM",
+         "PSU",
+         "Cabinet",
+         "Cooler",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "socket",
+        "label": "Socket / chipset",
+        "type": "text"
+       },
+       {
+        "key": "capacity",
+        "label": "Capacity",
+        "type": "text",
+        "main": true
+       },
+       {
+        "key": "wattage_w",
+        "label": "Wattage",
+        "type": "number",
+        "unit": "W"
+       },
+       {
+        "key": "form_factor",
+        "label": "Form factor",
+        "type": "enum",
+        "options": [
+         "ATX",
+         "Micro-ATX",
+         "Mini-ITX",
+         "Other"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "audio",
+   "name": "Audio",
+   "icon": "headphones",
+   "children": [
+    {
+     "slug": "headphones",
+     "name": "Headphones",
+     "examples": "Over-ear, on-ear, neckbands",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Over-ear",
+         "On-ear",
+         "Neckband",
+         "In-ear wired"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "connectivity",
+        "label": "Connectivity",
+        "type": "enum",
+        "options": [
+         "Wired",
+         "Wireless"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "anc",
+        "label": "Noise cancellation",
+        "type": "boolean",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "battery_h",
+        "label": "Battery life",
+        "type": "number",
+        "unit": "hours",
+        "main": true
+       },
+       {
+        "key": "driver_mm",
+        "label": "Driver size",
+        "type": "number",
+        "unit": "mm"
+       },
+       {
+        "key": "codec",
+        "label": "Codecs",
+        "type": "multi",
+        "options": [
+         "SBC",
+         "AAC",
+         "aptX",
+         "LDAC",
+         "LC3"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "tws-earbuds",
+     "name": "True wireless earbuds",
+     "examples": "TWS earbuds",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "anc",
+        "label": "Noise cancellation",
+        "type": "boolean",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "battery_total_h",
+        "label": "Battery (with case)",
+        "type": "number",
+        "unit": "hours",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "ip_rating",
+        "label": "Water resistance",
+        "type": "enum",
+        "options": [
+         "None",
+         "IPX4",
+         "IPX5",
+         "IP54",
+         "IP55",
+         "IPX7"
+        ],
+        "filter": true
+       },
+       {
+        "key": "codec",
+        "label": "Codecs",
+        "type": "multi",
+        "options": [
+         "SBC",
+         "AAC",
+         "aptX",
+         "LDAC",
+         "LC3"
+        ],
+        "filter": true
+       },
+       {
+        "key": "low_latency",
+        "label": "Low-latency mode",
+        "type": "boolean"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "bluetooth-speakers",
+     "name": "Bluetooth speakers",
+     "examples": "Portable, party speakers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "output_w",
+        "label": "Output",
+        "type": "number",
+        "unit": "W",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "battery_h",
+        "label": "Battery life",
+        "type": "number",
+        "unit": "hours",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "ip_rating",
+        "label": "Water resistance",
+        "type": "enum",
+        "options": [
+         "None",
+         "IPX4",
+         "IPX5",
+         "IPX6",
+         "IP67"
+        ],
+        "filter": true
+       },
+       {
+        "key": "bt_version",
+        "label": "Bluetooth version",
+        "type": "text"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "soundbars-home-theatre",
+     "name": "Soundbars & home theatre",
+     "examples": "Soundbars, 5.1 systems",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "channels",
+        "label": "Channels",
+        "type": "enum",
+        "options": [
+         "2.0",
+         "2.1",
+         "3.1",
+         "5.1",
+         "7.1",
+         "5.1.2",
+         "7.1.2"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "output_w",
+        "label": "Output",
+        "type": "number",
+        "unit": "W",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "subwoofer",
+        "label": "Subwoofer",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "earc",
+        "label": "HDMI eARC",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "atmos",
+        "label": "Dolby Atmos",
+        "type": "boolean",
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "microphones",
+     "name": "Microphones",
+     "examples": "USB, lavalier, podcast mics",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "USB",
+         "XLR",
+         "Lavalier",
+         "Wireless",
+         "Shotgun"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "connector",
+        "label": "Connector",
+        "type": "enum",
+        "options": [
+         "USB-C",
+         "USB-A",
+         "XLR",
+         "3.5 mm",
+         "Lightning"
+        ],
+        "filter": true
+       },
+       {
+        "key": "pattern",
+        "label": "Polar pattern",
+        "type": "enum",
+        "options": [
+         "Cardioid",
+         "Omnidirectional",
+         "Bidirectional",
+         "Supercardioid",
+         "Multi-pattern"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "wearables",
+   "name": "Wearables",
+   "icon": "watch",
+   "children": [
+    {
+     "slug": "smartwatches",
+     "name": "Smartwatches",
+     "examples": "AMOLED watches, calling watches",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "display_in",
+        "label": "Display size",
+        "type": "number",
+        "unit": "inch",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "display_type",
+        "label": "Display type",
+        "type": "enum",
+        "options": [
+         "AMOLED",
+         "LCD",
+         "TFT",
+         "MIP"
+        ],
+        "filter": true
+       },
+       {
+        "key": "battery_days",
+        "label": "Battery life",
+        "type": "number",
+        "unit": "days",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "gps",
+        "label": "Built-in GPS",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "bt_calling",
+        "label": "Bluetooth calling",
+        "type": "boolean",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "sensors",
+        "label": "Sensors",
+        "type": "multi",
+        "options": [
+         "Heart rate",
+         "SpO2",
+         "ECG",
+         "Skin temperature",
+         "Sleep"
+        ],
+        "filter": true
+       },
+       {
+        "key": "compatibility",
+        "label": "Works with",
+        "type": "multi",
+        "options": [
+         "Android",
+         "iOS"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "fitness-bands",
+     "name": "Fitness bands",
+     "examples": "Activity trackers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "battery_days",
+        "label": "Battery life",
+        "type": "number",
+        "unit": "days",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "sensors",
+        "label": "Sensors",
+        "type": "multi",
+        "options": [
+         "Heart rate",
+         "SpO2",
+         "Sleep",
+         "Stress"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "water_resistance",
+        "label": "Water resistance",
+        "type": "enum",
+        "options": [
+         "None",
+         "IP68",
+         "5 ATM"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "smart-rings",
+     "name": "Smart rings",
+     "examples": "Health rings",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "sizes",
+        "label": "Sizes available",
+        "type": "text",
+        "required": true,
+        "main": true
+       },
+       {
+        "key": "sensors",
+        "label": "Sensors",
+        "type": "multi",
+        "options": [
+         "Heart rate",
+         "SpO2",
+         "Skin temperature",
+         "Sleep"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "battery_days",
+        "label": "Battery life",
+        "type": "number",
+        "unit": "days",
+        "required": true,
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "vr-ar",
+     "name": "VR / AR headsets",
+     "examples": "VR headsets, smart glasses",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "VR headset",
+         "AR glasses",
+         "Smart glasses"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "resolution",
+        "label": "Resolution per eye",
+        "type": "text",
+        "main": true
+       },
+       {
+        "key": "standalone",
+        "label": "Works standalone",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "fov_deg",
+        "label": "Field of view",
+        "type": "number",
+        "unit": "degrees"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "tv-home-entertainment",
+   "name": "TV & Home Entertainment",
+   "icon": "tv",
+   "children": [
+    {
+     "slug": "smart-tvs",
+     "name": "Smart TVs",
+     "examples": "LED, QLED, OLED TVs",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "size_in",
+        "label": "Screen size",
+        "type": "number",
+        "unit": "inch",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "resolution",
+        "label": "Resolution",
+        "type": "enum",
+        "options": [
+         "HD Ready",
+         "Full HD",
+         "4K UHD",
+         "8K"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "panel",
+        "label": "Panel",
+        "type": "enum",
+        "options": [
+         "LED",
+         "QLED",
+         "Mini LED",
+         "OLED"
+        ],
+        "filter": true
+       },
+       {
+        "key": "smart_os",
+        "label": "Smart OS",
+        "type": "enum",
+        "options": [
+         "Google TV",
+         "Android TV",
+         "webOS",
+         "Tizen",
+         "Fire TV",
+         "Other"
+        ],
+        "filter": true
+       },
+       {
+        "key": "refresh_hz",
+        "label": "Refresh rate",
+        "type": "enum",
+        "unit": "Hz",
+        "options": [
+         "50",
+         "60",
+         "100",
+         "120",
+         "144"
+        ],
+        "filter": true
+       },
+       {
+        "key": "hdr",
+        "label": "HDR formats",
+        "type": "multi",
+        "options": [
+         "HDR10",
+         "HDR10+",
+         "Dolby Vision",
+         "HLG"
+        ],
+        "filter": true
+       },
+       {
+        "key": "hdmi_ports",
+        "label": "HDMI ports",
+        "type": "number"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "projectors",
+     "name": "Projectors",
+     "examples": "Home, portable projectors",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "lumens",
+        "label": "Brightness",
+        "type": "number",
+        "unit": "ANSI lumens",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "resolution",
+        "label": "Native resolution",
+        "type": "enum",
+        "options": [
+         "HD",
+         "Full HD",
+         "4K"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "throw_ratio",
+        "label": "Throw ratio",
+        "type": "text"
+       },
+       {
+        "key": "smart_os",
+        "label": "Smart OS",
+        "type": "enum",
+        "options": [
+         "Android TV",
+         "Google TV",
+         "Other",
+         "None"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "streaming-devices",
+     "name": "Streaming devices",
+     "examples": "Streaming sticks, set-top boxes",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "resolution",
+        "label": "Max resolution",
+        "type": "enum",
+        "options": [
+         "Full HD",
+         "4K"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "os",
+        "label": "Operating system",
+        "type": "enum",
+        "options": [
+         "Google TV",
+         "Android TV",
+         "Fire TV",
+         "tvOS",
+         "Other"
+        ],
+        "filter": true
+       },
+       {
+        "key": "voice_remote",
+        "label": "Voice remote",
+        "type": "boolean",
+        "filter": true,
+        "main": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "cameras-drones",
+   "name": "Cameras & Drones",
+   "icon": "camera",
+   "children": [
+    {
+     "slug": "cameras",
+     "name": "Cameras",
+     "examples": "Mirrorless, DSLR, compact",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Mirrorless",
+         "DSLR",
+         "Compact",
+         "Instant"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "sensor",
+        "label": "Sensor size",
+        "type": "enum",
+        "options": [
+         "Full frame",
+         "APS-C",
+         "Micro Four Thirds",
+         "1-inch",
+         "Smaller"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "megapixels",
+        "label": "Resolution",
+        "type": "number",
+        "unit": "MP",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "video",
+        "label": "Max video",
+        "type": "enum",
+        "options": [
+         "Full HD",
+         "4K",
+         "6K",
+         "8K"
+        ],
+        "filter": true
+       },
+       {
+        "key": "mount",
+        "label": "Lens mount",
+        "type": "enum",
+        "options": [
+         "Sony E",
+         "Canon RF",
+         "Canon EF",
+         "Nikon Z",
+         "Nikon F",
+         "Fujifilm X",
+         "L-Mount",
+         "Micro Four Thirds",
+         "Fixed lens"
+        ],
+        "filter": true
+       },
+       {
+        "key": "ibis",
+        "label": "In-body stabilisation",
+        "type": "boolean"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "action-cameras",
+     "name": "Action cameras",
+     "examples": "Helmet and sports cameras",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "video",
+        "label": "Max video",
+        "type": "enum",
+        "options": [
+         "2.7K",
+         "4K",
+         "5.3K",
+         "8K"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "fps",
+        "label": "Max frame rate",
+        "type": "number",
+        "unit": "fps"
+       },
+       {
+        "key": "waterproof_m",
+        "label": "Waterproof depth",
+        "type": "number",
+        "unit": "m",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "stabilisation",
+        "label": "Stabilisation",
+        "type": "boolean",
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "security-cameras",
+     "name": "Security cameras",
+     "examples": "Wi-Fi, outdoor and indoor cameras",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "resolution",
+        "label": "Resolution",
+        "type": "enum",
+        "options": [
+         "1080p",
+         "2K",
+         "3MP",
+         "4MP",
+         "4K"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "night_vision",
+        "label": "Night vision",
+        "type": "enum",
+        "options": [
+         "Infrared",
+         "Colour",
+         "None"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "storage",
+        "label": "Storage",
+        "type": "multi",
+        "options": [
+         "microSD",
+         "Cloud",
+         "NVR"
+        ],
+        "filter": true
+       },
+       {
+        "key": "two_way_audio",
+        "label": "Two-way audio",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "outdoor",
+        "label": "Outdoor rated",
+        "type": "boolean",
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "drones",
+     "name": "Drones",
+     "examples": "Camera drones, mini drones",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "camera",
+        "label": "Camera resolution",
+        "type": "enum",
+        "options": [
+         "None",
+         "Full HD",
+         "2.7K",
+         "4K",
+         "5.1K"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "flight_min",
+        "label": "Flight time",
+        "type": "number",
+        "unit": "minutes",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "range_km",
+        "label": "Range",
+        "type": "number",
+        "unit": "km",
+        "filter": true
+       },
+       {
+        "key": "weight_class",
+        "label": "DGCA weight class",
+        "type": "enum",
+        "options": [
+         "Nano (up to 250 g)",
+         "Micro (250 g–2 kg)",
+         "Small (2–25 kg)"
+        ],
+        "required": true,
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "camera-accessories",
+     "name": "Camera accessories",
+     "examples": "Lenses, tripods, gimbals, lights",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Lens",
+         "Tripod",
+         "Gimbal",
+         "Light",
+         "Bag",
+         "Memory",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "compatibility",
+        "label": "Mount / compatibility",
+        "type": "text",
+        "main": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "gaming",
+   "name": "Gaming",
+   "icon": "gamepad",
+   "children": [
+    {
+     "slug": "consoles",
+     "name": "Consoles",
+     "examples": "Home, handheld consoles",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "platform",
+        "label": "Platform",
+        "type": "enum",
+        "options": [
+         "PlayStation",
+         "Xbox",
+         "Nintendo",
+         "PC handheld",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "storage_gb",
+        "label": "Storage",
+        "type": "number",
+        "unit": "GB",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "edition",
+        "label": "Edition",
+        "type": "text"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "gaming-accessories",
+     "name": "Controllers & accessories",
+     "examples": "Controllers, headsets, chairs, mousepads",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Controller",
+         "Headset",
+         "Chair",
+         "Mousepad",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "platforms",
+        "label": "Works with",
+        "type": "multi",
+        "options": [
+         "PlayStation",
+         "Xbox",
+         "Nintendo",
+         "PC",
+         "Mobile"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "connectivity",
+        "label": "Connectivity",
+        "type": "enum",
+        "options": [
+         "Wired",
+         "Wireless",
+         "Both"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "smart-home",
+   "name": "Smart Home",
+   "icon": "smarthome",
+   "children": [
+    {
+     "slug": "plugs-bulbs-switches",
+     "name": "Smart plugs, bulbs & switches",
+     "examples": "Wi-Fi plugs, RGB bulbs",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Plug",
+         "Bulb",
+         "Switch",
+         "Strip light"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "protocol",
+        "label": "Protocol",
+        "type": "multi",
+        "options": [
+         "Wi-Fi",
+         "Zigbee",
+         "Matter",
+         "Bluetooth"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "assistants",
+        "label": "Voice assistants",
+        "type": "multi",
+        "options": [
+         "Alexa",
+         "Google Assistant",
+         "Siri"
+        ],
+        "filter": true
+       },
+       {
+        "key": "wattage_w",
+        "label": "Wattage",
+        "type": "number",
+        "unit": "W"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "smart-speakers-displays",
+     "name": "Smart speakers & displays",
+     "examples": "Voice assistants",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "assistant",
+        "label": "Assistant",
+        "type": "enum",
+        "options": [
+         "Alexa",
+         "Google Assistant",
+         "Siri",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "display_in",
+        "label": "Display size",
+        "type": "number",
+        "unit": "inch",
+        "filter": true
+       },
+       {
+        "key": "output_w",
+        "label": "Speaker output",
+        "type": "number",
+        "unit": "W"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "door-security",
+     "name": "Door & security",
+     "examples": "Video doorbells, smart locks, sensors",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Video doorbell",
+         "Smart lock",
+         "Sensor",
+         "Alarm"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "power",
+        "label": "Power source",
+        "type": "enum",
+        "options": [
+         "Battery",
+         "Wired",
+         "Both"
+        ],
+        "filter": true
+       },
+       {
+        "key": "connectivity",
+        "label": "Connectivity",
+        "type": "multi",
+        "options": [
+         "Wi-Fi",
+         "Bluetooth",
+         "Zigbee",
+         "Matter"
+        ],
+        "filter": true
+       },
+       {
+        "key": "unlock",
+        "label": "Unlock methods",
+        "type": "multi",
+        "options": [
+         "Fingerprint",
+         "PIN",
+         "App",
+         "RFID card",
+         "Key",
+         "Face"
+        ],
+        "main": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "robot-cleaners",
+     "name": "Robot cleaners",
+     "examples": "Robot vacuums, mops",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "suction_pa",
+        "label": "Suction power",
+        "type": "number",
+        "unit": "Pa",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "runtime_min",
+        "label": "Run time",
+        "type": "number",
+        "unit": "minutes",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "mapping",
+        "label": "Mapping",
+        "type": "enum",
+        "options": [
+         "LiDAR",
+         "Camera",
+         "Gyro",
+         "None"
+        ],
+        "filter": true
+       },
+       {
+        "key": "mop",
+        "label": "Mopping",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "auto_empty",
+        "label": "Self-emptying dock",
+        "type": "boolean",
+        "filter": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "personal-home-gadgets",
+   "name": "Personal & Home Gadgets",
+   "icon": "gadget",
+   "children": [
+    {
+     "slug": "personal-care",
+     "name": "Personal care electronics",
+     "examples": "Trimmers, hair dryers, electric toothbrushes",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Trimmer",
+         "Shaver",
+         "Hair dryer",
+         "Straightener",
+         "Toothbrush",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "power",
+        "label": "Power",
+        "type": "enum",
+        "options": [
+         "Battery",
+         "Corded",
+         "Both"
+        ],
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "runtime_min",
+        "label": "Run time",
+        "type": "number",
+        "unit": "minutes"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "air-water",
+     "name": "Air & water",
+     "examples": "Air purifiers, humidifiers, water purifiers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Air purifier",
+         "Humidifier",
+         "Dehumidifier",
+         "Water purifier"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "coverage_sqft",
+        "label": "Coverage",
+        "type": "number",
+        "unit": "sq ft",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "filter",
+        "label": "Filter type",
+        "type": "multi",
+        "options": [
+         "HEPA",
+         "Activated carbon",
+         "RO",
+         "UV",
+         "UF",
+         "Other"
+        ],
+        "filter": true
+       },
+       {
+        "key": "cadr",
+        "label": "CADR",
+        "type": "number",
+        "unit": "m³/h"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "kitchen-electronics",
+     "name": "Kitchen electronics",
+     "examples": "Smart kettles, induction cooktops, air fryers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Kettle",
+         "Induction cooktop",
+         "Air fryer",
+         "Mixer",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "capacity_l",
+        "label": "Capacity",
+        "type": "number",
+        "unit": "litres",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "wattage_w",
+        "label": "Wattage",
+        "type": "number",
+        "unit": "W",
+        "filter": true
+       },
+       {
+        "key": "smart",
+        "label": "App control",
+        "type": "boolean",
+        "filter": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "tools-diy",
+   "name": "Tools & DIY Electronics",
+   "icon": "tool",
+   "children": [
+    {
+     "slug": "power-tools",
+     "name": "Power tools",
+     "examples": "Drills, drivers, grinders",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Drill",
+         "Impact driver",
+         "Grinder",
+         "Saw",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "power",
+        "label": "Power",
+        "type": "enum",
+        "options": [
+         "Cordless",
+         "Corded"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "voltage_v",
+        "label": "Voltage",
+        "type": "number",
+        "unit": "V",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "battery_ah",
+        "label": "Battery",
+        "type": "number",
+        "unit": "Ah"
+       },
+       {
+        "key": "torque_nm",
+        "label": "Max torque",
+        "type": "number",
+        "unit": "Nm"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "soldering-repair",
+     "name": "Soldering & repair",
+     "examples": "Soldering stations, heat guns, repair kits",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Soldering station",
+         "Soldering iron",
+         "Heat gun",
+         "Repair kit"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "wattage_w",
+        "label": "Wattage",
+        "type": "number",
+        "unit": "W",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "temp_range",
+        "label": "Temperature range",
+        "type": "text"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "test-measurement",
+     "name": "Test & measurement",
+     "examples": "Multimeters, oscilloscopes, clamp meters",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Multimeter",
+         "Oscilloscope",
+         "Clamp meter",
+         "Logic analyser",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "channels",
+        "label": "Channels",
+        "type": "number",
+        "filter": true
+       },
+       {
+        "key": "bandwidth_mhz",
+        "label": "Bandwidth",
+        "type": "number",
+        "unit": "MHz",
+        "main": true
+       },
+       {
+        "key": "accuracy",
+        "label": "Accuracy",
+        "type": "text"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "development-boards",
+     "name": "Development boards",
+     "examples": "Microcontroller and single-board computers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "chip",
+        "label": "Chip",
+        "type": "text",
+        "required": true,
+        "main": true
+       },
+       {
+        "key": "clock_mhz",
+        "label": "Clock",
+        "type": "number",
+        "unit": "MHz"
+       },
+       {
+        "key": "ram",
+        "label": "RAM",
+        "type": "text",
+        "main": true
+       },
+       {
+        "key": "gpio",
+        "label": "GPIO pins",
+        "type": "number"
+       },
+       {
+        "key": "wireless",
+        "label": "Wireless",
+        "type": "multi",
+        "options": [
+         "Wi-Fi",
+         "Bluetooth",
+         "LoRa",
+         "None"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "components-modules",
+     "name": "Electronic components & modules",
+     "examples": "Sensors, relays, ICs, resistor kits",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "component",
+        "label": "Component type",
+        "type": "enum",
+        "options": [
+         "Sensor",
+         "Relay",
+         "IC",
+         "Passive kit",
+         "Display",
+         "Motor",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "package",
+        "label": "Package",
+        "type": "text"
+       },
+       {
+        "key": "voltage",
+        "label": "Operating voltage",
+        "type": "text",
+        "main": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "3d-printers",
+     "name": "3D printers & accessories",
+     "examples": "FDM/resin printers, filament",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "FDM printer",
+         "Resin printer",
+         "Filament",
+         "Resin",
+         "Accessory"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "build_volume",
+        "label": "Build volume",
+        "type": "text",
+        "main": true
+       },
+       {
+        "key": "materials",
+        "label": "Materials",
+        "type": "multi",
+        "options": [
+         "PLA",
+         "PETG",
+         "ABS",
+         "TPU",
+         "Resin"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "power-energy",
+   "name": "Power & Energy",
+   "icon": "bolt",
+   "children": [
+    {
+     "slug": "ups-inverters",
+     "name": "UPS & inverters",
+     "examples": "Home inverters, PC UPS",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Inverter",
+         "UPS"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "va",
+        "label": "Rating",
+        "type": "number",
+        "unit": "VA",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "battery_type",
+        "label": "Battery type",
+        "type": "enum",
+        "options": [
+         "Lead-acid",
+         "Tubular",
+         "Lithium-ion",
+         "Not included"
+        ],
+        "filter": true
+       },
+       {
+        "key": "backup_min",
+        "label": "Backup time",
+        "type": "number",
+        "unit": "minutes",
+        "main": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "solar",
+     "name": "Solar",
+     "examples": "Panels, kits, charge controllers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Panel",
+         "Kit",
+         "Charge controller",
+         "Inverter"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "wattage_w",
+        "label": "Wattage",
+        "type": "number",
+        "unit": "W",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "panel_type",
+        "label": "Panel type",
+        "type": "enum",
+        "options": [
+         "Mono PERC",
+         "Polycrystalline",
+         "Bifacial",
+         "TOPCon"
+        ],
+        "filter": true
+       },
+       {
+        "key": "efficiency_pct",
+        "label": "Efficiency",
+        "type": "number",
+        "unit": "%"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "batteries-chargers",
+     "name": "Batteries & chargers",
+     "examples": "Rechargeable cells, chargers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "chemistry",
+        "label": "Chemistry",
+        "type": "enum",
+        "options": [
+         "NiMH",
+         "Li-ion",
+         "LiFePO4",
+         "Alkaline"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "capacity_mah",
+        "label": "Capacity",
+        "type": "number",
+        "unit": "mAh",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "size",
+        "label": "Size",
+        "type": "enum",
+        "options": [
+         "AA",
+         "AAA",
+         "18650",
+         "21700",
+         "9V",
+         "Other"
+        ],
+        "filter": true
+       }
+      ]
+     }
+    },
+    {
+     "slug": "ev-charging",
+     "name": "EV charging",
+     "examples": "Home EV chargers",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "power_kw",
+        "label": "Power",
+        "type": "number",
+        "unit": "kW",
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "connector",
+        "label": "Connector",
+        "type": "enum",
+        "options": [
+         "Type 2",
+         "CCS2",
+         "Bharat AC-001",
+         "Bharat DC-001",
+         "15 A socket"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "smart",
+        "label": "App control",
+        "type": "boolean",
+        "filter": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "slug": "car-bike-electronics",
+   "name": "Car & Bike Electronics",
+   "icon": "car",
+   "children": [
+    {
+     "slug": "dash-cams",
+     "name": "Dash cams",
+     "examples": "Front, dual dash cams",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "resolution",
+        "label": "Resolution",
+        "type": "enum",
+        "options": [
+         "1080p",
+         "2K",
+         "4K"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "channels",
+        "label": "Cameras",
+        "type": "enum",
+        "options": [
+         "Front",
+         "Front + rear",
+         "Front + rear + cabin"
+        ],
+        "filter": true
+       },
+       {
+        "key": "night_vision",
+        "label": "Night vision",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "parking_mode",
+        "label": "Parking mode",
+        "type": "boolean",
+        "filter": true
+       },
+       {
+        "key": "gps",
+        "label": "GPS",
+        "type": "boolean"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "car-audio-infotainment",
+     "name": "Car audio & infotainment",
+     "examples": "Stereos, Android Auto / CarPlay units",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "screen_in",
+        "label": "Screen size",
+        "type": "number",
+        "unit": "inch",
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "carplay_aa",
+        "label": "CarPlay / Android Auto",
+        "type": "enum",
+        "options": [
+         "Both",
+         "CarPlay",
+         "Android Auto",
+         "None"
+        ],
+        "required": true,
+        "filter": true
+       },
+       {
+        "key": "output_w",
+        "label": "Output",
+        "type": "number",
+        "unit": "W"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "trackers-helmet-tech",
+     "name": "Trackers & helmet tech",
+     "examples": "GPS trackers, helmet intercoms",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "GPS tracker",
+         "Helmet intercom",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "connectivity",
+        "label": "Connectivity",
+        "type": "multi",
+        "options": [
+         "GSM",
+         "Bluetooth",
+         "Wi-Fi"
+        ],
+        "filter": true
+       },
+       {
+        "key": "battery_h",
+        "label": "Battery life",
+        "type": "number",
+        "unit": "hours"
+       },
+       {
+        "key": "range_m",
+        "label": "Range",
+        "type": "number",
+        "unit": "m"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "car-accessories",
+     "name": "Car accessories",
+     "examples": "Car chargers, tyre inflators, vacuum cleaners",
+     "specSchema": {
+      "fields": [
+       {
+        "key": "type",
+        "label": "Type",
+        "type": "enum",
+        "options": [
+         "Charger",
+         "Tyre inflator",
+         "Vacuum",
+         "Mount",
+         "Other"
+        ],
+        "required": true,
+        "filter": true,
+        "main": true
+       },
+       {
+        "key": "power",
+        "label": "Power source",
+        "type": "enum",
+        "options": [
+         "12 V socket",
+         "Battery",
+         "USB"
+        ],
+        "filter": true
+       },
+       {
+        "key": "output",
+        "label": "Output",
+        "type": "text",
+        "main": true
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -135,6 +135,24 @@ type AuditLog struct {
 	At           time.Time   `json:"at"`
 }
 
+type Category struct {
+	ID            uuid.UUID  `json:"id"`
+	ParentID      *uuid.UUID `json:"parentId"`
+	Slug          string     `json:"slug"`
+	Name          string     `json:"name"`
+	Icon          string     `json:"icon"`
+	Examples      string     `json:"examples"`
+	Position      int32      `json:"position"`
+	SpecSchema    []byte     `json:"specSchema"`
+	CommissionBps *int32     `json:"commissionBps"`
+	GstRateBps    int32      `json:"gstRateBps"`
+	Hsn           *string    `json:"hsn"`
+	Status        string     `json:"status"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+	Version       int32      `json:"version"`
+}
+
 type Config struct {
 	Key       string     `json:"key"`
 	Value     []byte     `json:"value"`

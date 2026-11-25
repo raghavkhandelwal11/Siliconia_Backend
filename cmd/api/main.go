@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/catalogue"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/config"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/crypto"
@@ -66,6 +67,7 @@ func main() {
 		Limiter:        limiter,
 		AuthService:    authSvc,
 		Auth:           authHandler,
+		Catalogue:      &catalogue.Handler{Q: store.New(pool)},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,
