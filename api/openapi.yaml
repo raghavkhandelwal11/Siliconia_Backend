@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -1312,6 +1312,90 @@ paths:
                   checkoutUrl: { type: string }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /serviceability/{pincode}:
+    get:
+      operationId: checkServiceability
+      summary: Can we deliver to this PIN code, with COD, and how fast (sim-ship)
+      tags: [shipping]
+      security: []
+      parameters:
+        - { name: pincode, in: path, required: true, schema: { type: string, pattern: "^[1-9][0-9]{5}$" } }
+      responses:
+        "200":
+          description: Serviceability
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Serviceability" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /seller/sub-orders/{id}/ship:
+    post:
+      operationId: shipSubOrder
+      summary: Book the courier for a confirmed sub-order (AWB and label); moves it to SHIPPED
+      description: Idempotent; calling it again returns the same shipment. COD orders collect the sub-order total.
+      tags: [shipping]
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                weightGrams: { type: integer, minimum: 1, maximum: 50000 }
+      responses:
+        "200":
+          description: The shipment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Shipment" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /seller/sub-orders/{id}/label:
+    get:
+      operationId: getShippingLabel
+      summary: The 4×6 inch shipping label (PDF)
+      tags: [shipping]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Label
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/Error" }
+  /webhooks/shipping:
+    post:
+      operationId: shippingWebhook
+      summary: Tracking scans from the courier (sim-ship), signed with X-Sim-Signature
+      description: |
+        Type `shipment.status` with data {awb, ref, kind, status, location, at, eta}. Statuses: MANIFESTED, PICKED_UP,
+        IN_TRANSIT, OUT_FOR_DELIVERY, FAILED_ATTEMPT, DELIVERED, RTO_INITIATED, RTO_DELIVERED, CANCELLED.
+        De-duplicated on the event id; scans older than the last one are recorded but do not change the status.
+      tags: [shipping]
+      security: []
+      parameters:
+        - { name: X-Sim-Signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, type, data]
+              properties:
+                id: { type: string }
+                type: { type: string }
+                created: { type: integer }
+                data: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: Applied (or already applied) }
+        "400": { description: Bad signature or malformed event }
+        "500": { description: Not applied; the courier retries }
   /webhooks/payment:
     post:
       operationId: paymentWebhook
@@ -1902,6 +1986,14 @@ components:
         payablePaise: { type: integer, format: int64 }
         codEligible: { type: boolean }
         codLimitPaise: { type: integer, format: int64 }
+        codReason: { type: string, enum: [OVER_LIMIT, PIN_NO_COD], description: Why cash on delivery is not offered }
+        delivery:
+          type: object
+          required: [deliverable]
+          properties:
+            deliverable: { type: boolean }
+            etaDays: { type: integer }
+            estimatedBy: { type: string, format: date-time }
         electronsNonMember: { type: integer }
         electronsMember: { type: integer }
         quoteHash: { type: string }
@@ -1945,6 +2037,25 @@ components:
               status: { type: string, enum: [PENDING_PAYMENT, CONFIRMED, PACKED, SHIPPED, OUT_FOR_DELIVERY, DELIVERED, EXPIRED, CANCELLED, RTO] }
               subtotalPaise: { type: integer, format: int64 }
               items: { type: array, items: { $ref: "#/components/schemas/OrderItem" } }
+              deliveredAt: { type: string, format: date-time }
+              returnWindowEndsAt: { type: string, format: date-time }
+              shipment:
+                type: object
+                required: [awb, courier, status, events]
+                properties:
+                  awb: { type: string }
+                  courier: { type: string }
+                  status: { type: string }
+                  eta: { type: string, format: date-time }
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      required: [status, location, at]
+                      properties:
+                        status: { type: string }
+                        location: { type: string }
+                        at: { type: string, format: date-time }
         payment:
           type: object
           required: [status]
@@ -1963,6 +2074,23 @@ components:
         placedAt: { type: string, format: date-time }
         itemCount: { type: integer }
         coverUrl: { type: string }
+    Serviceability:
+      type: object
+      required: [pincode, deliverable, cod, etaDays]
+      properties:
+        pincode: { type: string }
+        deliverable: { type: boolean }
+        cod: { type: boolean }
+        etaDays: { type: integer }
+    Shipment:
+      type: object
+      required: [awb, status, codAmountPaise, courier]
+      properties:
+        awb: { type: string }
+        status: { type: string }
+        eta: { type: string, format: date-time }
+        codAmountPaise: { type: integer, format: int64 }
+        courier: { type: string }
   responses:
     Error:
       description: Problem details (see code)

@@ -43,10 +43,14 @@ type Config struct {
 	ProviderKYC      string
 	SimKYCURL        string
 
-	ProviderPayment     string
-	SimPayURL           string
-	SimPayAPIKey        string
-	SimPayWebhookSecret string
+	ProviderPayment      string
+	SimPayURL            string
+	SimPayAPIKey         string
+	SimPayWebhookSecret  string
+	ProviderShipping     string
+	SimShipURL           string
+	SimShipAPIKey        string
+	SimShipWebhookSecret string
 
 	// S3-compatible object storage: SeaweedFS (local, VM) or Cloudflare R2.
 	StorageEndpoint    string
@@ -92,6 +96,10 @@ func Load() (Config, error) {
 		SimPayURL:               env("SIM_PAY_URL", "http://localhost:9001"),
 		SimPayAPIKey:            os.Getenv("SIM_PAY_API_KEY"),
 		SimPayWebhookSecret:     os.Getenv("SIM_PAY_WEBHOOK_SECRET"),
+		ProviderShipping:        env("PROVIDER_SHIPPING", "sim"),
+		SimShipURL:              env("SIM_SHIP_URL", "http://localhost:9002"),
+		SimShipAPIKey:           os.Getenv("SIM_SHIP_API_KEY"),
+		SimShipWebhookSecret:    os.Getenv("SIM_SHIP_WEBHOOK_SECRET"),
 		StorageEndpoint:         env("STORAGE_ENDPOINT", "localhost:8333"),
 		StorageAccessKey:        os.Getenv("STORAGE_ACCESS_KEY"),
 		StorageSecretKey:        os.Getenv("STORAGE_SECRET_KEY"),
@@ -119,6 +127,8 @@ func Load() (Config, error) {
 		c.StorageSecretKey = orDefault(c.StorageSecretKey, DevKey("storage")[:32])
 		c.SimPayAPIKey = orDefault(c.SimPayAPIKey, DevKey("sim-pay-api")[:32])
 		c.SimPayWebhookSecret = orDefault(c.SimPayWebhookSecret, DevKey("sim-pay-webhook")[:32])
+		c.SimShipAPIKey = orDefault(c.SimShipAPIKey, DevKey("sim-ship-api")[:32])
+		c.SimShipWebhookSecret = orDefault(c.SimShipWebhookSecret, DevKey("sim-ship-webhook")[:32])
 	}
 	return c, c.validate()
 }
@@ -134,7 +144,7 @@ func (c Config) validate() error {
 	case ModeLocal, ModeCI, ModePrototype:
 	case ModeProduction:
 		// Production is planned in paid-later/ and is not part of this build.
-		for name, v := range map[string]string{"PROVIDER_SMS": c.ProviderSMS, "PROVIDER_WHATSAPP": c.ProviderWhatsApp, "PROVIDER_KYC": c.ProviderKYC, "PROVIDER_PAYMENT": c.ProviderPayment} {
+		for name, v := range map[string]string{"PROVIDER_SMS": c.ProviderSMS, "PROVIDER_WHATSAPP": c.ProviderWhatsApp, "PROVIDER_KYC": c.ProviderKYC, "PROVIDER_PAYMENT": c.ProviderPayment, "PROVIDER_SHIPPING": c.ProviderShipping} {
 			if v == "sim" {
 				return fmt.Errorf("config: %s=sim is not allowed in production mode", name)
 			}

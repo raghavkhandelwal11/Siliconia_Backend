@@ -38,8 +38,11 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
 	provider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/payment"
+	shipprovider "github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/shipping"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/shipping"
 	simpay "github.com/raghavkhandelwal11/Siliconia_Backend/internal/sim/pay"
+	simship "github.com/raghavkhandelwal11/Siliconia_Backend/internal/sim/ship"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
 )
 
@@ -66,6 +69,8 @@ type env struct {
 	co     *checkout.Service
 	sim    *simpay.Sim
 	simURL string
+	ship   *shipping.Service
+	ships  *simship.Sim
 }
 
 func setup(t *testing.T) *env {
@@ -83,7 +88,7 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE accounts, sessions, otp_challenges, seller_profiles, uploads, products, categories, carts, wishlist_items, payments, refunds, webhook_events, outbox, idempotency_keys, shipments CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := catalogue.Seed(ctx, pool); err != nil {
@@ -99,12 +104,14 @@ func setup(t *testing.T) *env {
 	authSvc := &auth.Service{Pool: pool, Q: q, Redis: rdb, Messages: in, Signer: signer, Box: box, Pepper: []byte("p"), Log: log}
 	secret := []byte("whsec-test")
 	pays := &payment.Service{Pool: pool, Q: q, Log: log}
-	co := &checkout.Service{Pool: pool, Q: q, Payments: pays, PublicURL: "http://shop.test", Log: log}
+	shipSecret := []byte("ship-secret")
+	ships := &shipping.Service{Pool: pool, Q: q, Log: log}
+	co := &checkout.Service{Pool: pool, Q: q, Payments: pays, PublicURL: "http://shop.test", Log: log, Shipping: ships}
 	pays.Hooks = map[string]payment.Hook{"ORDER": co.OnPayment}
 	srv := httptest.NewServer(server.New(server.Deps{
 		Log: log, Health: &health.Handler{}, AuthService: authSvc, Auth: auth.NewHandler(authSvc, nil, false),
 		Cart:    &cart.Handler{Svc: &cart.Service{Pool: pool, Q: q}},
-		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co},
+		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships},
 	}))
 	t.Cleanup(srv.Close)
 	sim := simpay.New(simpay.Config{PublicURL: "http://shop.test", APIKey: "k", WebhookURL: srv.URL + "/api/v1/webhooks/payment",
@@ -112,8 +119,13 @@ func setup(t *testing.T) *env {
 	simSrv := httptest.NewServer(sim.Handler())
 	t.Cleanup(simSrv.Close)
 	pays.Provider = provider.NewSim(simSrv.URL, "k", secret)
+	shipSim := simship.New(simship.Config{APIKey: "sk", WebhookURL: srv.URL + "/api/v1/webhooks/shipping", WebhookSecret: shipSecret,
+		Step: 10 * time.Millisecond, RetryBase: 5 * time.Millisecond, MaxAttempts: 5, Log: log})
+	shipSrv := httptest.NewServer(shipSim.Handler())
+	t.Cleanup(shipSrv.Close)
+	ships.Provider = shipprovider.NewSim(shipSrv.URL, "sk", shipSecret)
 	return &env{t: t, ctx: ctx, pool: pool, srv: srv, prods: &product.Service{Pool: pool, Q: q, Store: storage.NewMemory(), Log: log}, inbox: in, mr: mr,
-		co: co, sim: sim, simURL: simSrv.URL}
+		co: co, sim: sim, simURL: simSrv.URL, ship: ships, ships: shipSim}
 }
 
 // listed creates a live product with one variant and returns its variant ID.
@@ -223,11 +235,13 @@ func (e *env) outbox(topic string) int {
 }
 
 // buyer signs in and saves a default address.
-func (e *env) buyer(phone string) (*client, string) {
+func (e *env) buyer(phone string) (*client, string) { return e.buyerAt(phone, "560001") }
+
+func (e *env) buyerAt(phone, pin string) (*client, string) {
 	b := e.browser()
 	b.signIn(phone, "BUYER")
 	st, a := b.do("POST", "/me/addresses", map[string]any{"name": "Asha Rao", "phone": "+91 98765 00000", "line1": "12 MG Road",
-		"city": "Bengaluru", "state": "Karnataka", "pincode": "560001"}, true)
+		"city": "Bengaluru", "state": "Karnataka", "pincode": pin}, true)
 	if st != 201 || a["isDefault"] != true {
 		e.t.Fatalf("address: %d %v", st, a)
 	}
@@ -448,5 +462,124 @@ func TestUnpaidOrderExpiresAndLatePaymentIsRefunded(t *testing.T) {
 	}
 	if _, o = b.do("GET", "/orders/"+o["id"].(string), nil, false); o["status"] != "EXPIRED" {
 		t.Fatalf("stays expired: %v", o)
+	}
+}
+
+// pickup gives a seller a pickup address.
+func (e *env) pickup(seller uuid.UUID) {
+	e.t.Helper()
+	if _, err := e.pool.Exec(e.ctx, `UPDATE seller_profiles SET pickup_address = '{"line1":"Plot 4, Sector 18","city":"Noida","state":"Uttar Pradesh","pincode":"201301","phone":"9876500009"}' WHERE account_id = $1`, seller); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
+// placeCOD places a COD order for one unit and returns the order view.
+func (e *env) placeCOD(b *client, addr string, variant uuid.UUID, key string) map[string]any {
+	e.t.Helper()
+	b.do("PUT", "/cart/items/"+variant.String(), map[string]int{"qty": 1}, true)
+	q := b.quote(addr, "COD")
+	st, o := b.doKey("POST", "/orders", map[string]any{"addressId": addr, "payMethod": "COD", "quoteHash": q["quoteHash"]}, true, key)
+	if st != 201 {
+		e.t.Fatalf("place: %d %v", st, o)
+	}
+	return o
+}
+
+func subOrder(o map[string]any) map[string]any { return o["subOrders"].([]any)[0].(map[string]any) }
+
+func TestShipTrackAndDeliver(t *testing.T) {
+	e := setup(t)
+	bank, _, seller := e.listed("Volt Store", "Volt Cell", 279900, 5)
+	b, addr := e.buyer("9876511111")
+	o := e.placeCOD(b, addr, bank, "key-ship-0001")
+	subID := uuid.MustParse(subOrder(o)["id"].(string))
+
+	if _, err := e.ship.Ship(e.ctx, seller, subID, 400); err != shipping.ErrNoPickup {
+		t.Fatalf("no pickup address: %v", err)
+	}
+	e.pickup(seller)
+	if _, err := e.ship.Ship(e.ctx, uuid.New(), subID, 400); err == nil {
+		t.Fatal("another seller cannot ship it")
+	}
+	sh, err := e.ship.Ship(e.ctx, seller, subID, 400)
+	if err != nil || sh.AWB == "" || sh.CODAmountPaise != 279900 {
+		t.Fatalf("ship: %+v %v", sh, err)
+	}
+	if again, _ := e.ship.Ship(e.ctx, seller, subID, 400); again.AWB != sh.AWB {
+		t.Fatal("shipping twice returns the same AWB")
+	}
+	pdf, awb, err := e.ship.Label(e.ctx, seller, subID)
+	if err != nil || awb != sh.AWB || !strings.HasPrefix(string(pdf), "%PDF") {
+		t.Fatalf("label: %v %s", err, awb)
+	}
+	if st, _ := b.do("POST", "/seller/sub-orders/"+subID.String()+"/ship", nil, true); st != 403 {
+		t.Fatalf("buyers cannot ship: %d", st)
+	}
+
+	e.ships.Wait()
+	_, o = b.do("GET", "/orders/"+o["id"].(string), nil, false)
+	so := subOrder(o)
+	track, _ := so["shipment"].(map[string]any)
+	if so["status"] != "DELIVERED" || so["deliveredAt"] == nil || so["returnWindowEndsAt"] == nil || track == nil || track["status"] != "DELIVERED" {
+		t.Fatalf("delivered: %v", so)
+	}
+	if n := len(track["events"].([]any)); n != 6 {
+		t.Fatalf("tracking scans: %d %v", n, track["events"])
+	}
+	var cod int64
+	var window time.Duration
+	_ = e.pool.QueryRow(e.ctx, `SELECT cod_collected_paise, return_window_ends_at - delivered_at FROM sub_orders WHERE id = $1`, subID).Scan(&cod, &window)
+	if cod != 279900 || window != 7*24*time.Hour {
+		t.Fatalf("COD collected %d, return window %v", cod, window)
+	}
+	if e.outbox("suborder.status_changed") < 3 {
+		t.Fatalf("status events: %d", e.outbox("suborder.status_changed"))
+	}
+}
+
+func TestUndeliveredParcelReturnsToOrigin(t *testing.T) {
+	e := setup(t)
+	bank, _, seller := e.listed("Volt Store", "Volt Cell", 279900, 5)
+	e.pickup(seller)
+	b, addr := e.buyerAt("9876511111", simship.PinRTO)
+	o := e.placeCOD(b, addr, bank, "key-rto-00001")
+	if _, err := e.ship.Ship(e.ctx, seller, uuid.MustParse(subOrder(o)["id"].(string)), 0); err != nil {
+		t.Fatal(err)
+	}
+	e.ships.Wait()
+	_, o = b.do("GET", "/orders/"+o["id"].(string), nil, false)
+	if so := subOrder(o); so["status"] != "RTO" || so["shipment"].(map[string]any)["status"] != "RTO_DELIVERED" || so["deliveredAt"] != nil {
+		t.Fatalf("RTO: %v", so)
+	}
+}
+
+func TestPinServiceability(t *testing.T) {
+	e := setup(t)
+	bank, _, _ := e.listed("Volt Store", "Volt Cell", 279900, 5)
+	b := e.browser()
+	b.signIn("9876511111", "BUYER")
+	if st, o := b.do("POST", "/me/addresses", map[string]any{"name": "Asha Rao", "phone": "9876500000", "line1": "1 Road",
+		"city": "Nowhere", "state": "Delhi", "pincode": simship.PinNotServiceable}, true); st != 422 || o["code"] != "PIN_NOT_SERVICEABLE" {
+		t.Fatalf("unserviceable PIN: %d %v", st, o)
+	}
+	_, a := b.do("POST", "/me/addresses", map[string]any{"name": "Asha Rao", "phone": "9876500000", "line1": "1 Hill Road",
+		"city": "Itanagar", "state": "Arunachal Pradesh", "pincode": "791111"}, true)
+	b.do("PUT", "/cart/items/"+bank.String(), map[string]int{"qty": 1}, true)
+	q := b.quote(a["id"].(string), "COD")
+	d, _ := q["delivery"].(map[string]any)
+	if q["codEligible"] != false || q["codReason"] != "PIN_NO_COD" || q["canPlace"] != false || d == nil || d["etaDays"].(float64) != 6 || d["estimatedBy"] == nil {
+		t.Fatalf("prepaid-only PIN: %v", q)
+	}
+	if q = b.quote(a["id"].(string), "ONLINE"); q["canPlace"] != true {
+		t.Fatalf("online still works: %v", q)
+	}
+	res, _ := http.Get(e.srv.URL + "/api/v1/serviceability/560001")
+	var sv map[string]any
+	_ = json.NewDecoder(res.Body).Decode(&sv)
+	if res.StatusCode != 200 || sv["deliverable"] != true || sv["cod"] != true || sv["etaDays"].(float64) != 2 {
+		t.Fatalf("public PIN check: %d %v", res.StatusCode, sv)
+	}
+	if res, _ := http.Get(e.srv.URL + "/api/v1/serviceability/12"); res.StatusCode != 400 {
+		t.Fatalf("bad PIN: %d", res.StatusCode)
 	}
 }

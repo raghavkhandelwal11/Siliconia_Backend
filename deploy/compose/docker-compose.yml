@@ -104,6 +104,15 @@ services:
     depends_on: {}
     deploy: { resources: { limits: { memory: 128m } } }
 
+  sim-ship:
+    <<: *backend
+    command: ["/usr/local/bin/sim-ship"]
+    environment:
+      HTTP_ADDR: ":9002"
+      SIM_SHIP_WEBHOOK_URL: "http://api:8080/api/v1/webhooks/shipping"
+    depends_on: {}
+    deploy: { resources: { limits: { memory: 128m } } }
+
   # S3-compatible object storage for product images (free; Cloudflare R2 can
   # replace it by pointing STORAGE_* at R2). Credentials come from .env.
   seaweedfs:

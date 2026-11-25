@@ -551,6 +551,21 @@ type Session struct {
 	RevokedAt       *time.Time      `json:"revokedAt"`
 }
 
+type Shipment struct {
+	ID             uuid.UUID  `json:"id"`
+	SubOrderID     uuid.UUID  `json:"subOrderId"`
+	Kind           string     `json:"kind"`
+	Ref            string     `json:"ref"`
+	Provider       string     `json:"provider"`
+	Awb            string     `json:"awb"`
+	Status         string     `json:"status"`
+	Eta            *time.Time `json:"eta"`
+	CodAmountPaise int64      `json:"codAmountPaise"`
+	LastEventAt    *time.Time `json:"lastEventAt"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
+}
+
 type SubOrder struct {
 	ID                 uuid.UUID  `json:"id"`
 	OrderID            uuid.UUID  `json:"orderId"`
@@ -562,6 +577,16 @@ type SubOrder struct {
 	ReturnWindowEndsAt *time.Time `json:"returnWindowEndsAt"`
 	SettledAt          *time.Time `json:"settledAt"`
 	Version            int32      `json:"version"`
+	CodCollectedPaise  int64      `json:"codCollectedPaise"`
+}
+
+type TrackingEvent struct {
+	ID         uuid.UUID `json:"id"`
+	ShipmentID uuid.UUID `json:"shipmentId"`
+	Status     string    `json:"status"`
+	Location   string    `json:"location"`
+	At         time.Time `json:"at"`
+	Raw        []byte    `json:"raw"`
 }
 
 type Upload struct {
