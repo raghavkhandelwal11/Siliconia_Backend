@@ -28,6 +28,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/kyc"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/provider/messaging"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/search"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/server"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/store"
@@ -91,6 +92,7 @@ func main() {
 		Catalogue:      &catalogue.Handler{Q: store.New(pool)},
 		Seller:         &seller.Handler{Svc: sellers},
 		Product:        &product.Handler{Svc: products},
+		Search:         &search.Handler{Svc: &search.Service{Pool: pool, Q: authSvc.Q}},
 		GuestPerMinute: cfg.GuestRateLimitPerMinute,
 		Health: &health.Handler{
 			Version: cfg.Version,

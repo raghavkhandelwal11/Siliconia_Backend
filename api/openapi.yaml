@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Siliconics API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     REST API for the Siliconics prototype (LLD section 7). Source of truth for the
     HTTP contract; the web app generates its TypeScript client from this file.
@@ -901,6 +901,64 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
+  /products:
+    get:
+      operationId: searchProducts
+      summary: Search and category listing with filters, facets and sorting (UI-PUB-03)
+      description: |
+        Only live products from approved sellers. Text search uses full-text plus fuzzy matching.
+        Spec filters apply to a sub-category: `spec.<key>=a,b` for choices, `spec.<key>=true` for yes/no,
+        `spec.<key>=4..8` for number ranges. Facets for a group ignore that group's own selection.
+        Cached for 30 seconds.
+      tags: [catalogue]
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: category, in: query, schema: { type: string }, description: "Slug; a top-level category includes its sub-categories" }
+        - { name: brand, in: query, schema: { type: string }, description: Comma-separated }
+        - { name: priceMin, in: query, schema: { type: integer, format: int64 }, description: Paise }
+        - { name: priceMax, in: query, schema: { type: integer, format: int64 }, description: Paise }
+        - { name: rating, in: query, schema: { type: number, minimum: 0, maximum: 5 } }
+        - { name: local, in: query, schema: { type: boolean } }
+        - { name: inStock, in: query, schema: { type: boolean } }
+        - { name: verified, in: query, schema: { type: boolean } }
+        - { name: sort, in: query, schema: { type: string, enum: [relevance, price_asc, price_desc, newest, rating, popular], default: relevance } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 48, default: 24 } }
+        - name: spec
+          in: query
+          style: deepObject
+          explode: true
+          schema: { type: object, additionalProperties: { type: string } }
+          description: "Spec filters sent as spec.<key>=<value> (see description)"
+      responses:
+        "200":
+          description: One page of results with facets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SearchResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /products/suggest:
+    get:
+      operationId: suggestProducts
+      summary: Search-box suggestions (products, brands, sub-categories) for 2+ characters
+      tags: [catalogue]
+      security: []
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, maxLength: 60 } }
+      responses:
+        "200":
+          description: Suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suggestions]
+                properties:
+                  suggestions: { type: array, items: { $ref: "#/components/schemas/Suggestion" } }
+        "429": { $ref: "#/components/responses/RateLimited" }
 components:
   securitySchemes:
     sessionCookie:
@@ -1154,6 +1212,76 @@ components:
         available: { type: integer }
         coverUrl: { type: string }
         updatedAt: { type: string, format: date-time }
+    ProductCard:
+      type: object
+      required: [id, slug, name, brand, pricePaise, mrpPaise, discountPct, inStock, ratingAvg, ratingCount, isLocal, verifiedSeller]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        brand: { type: string }
+        coverUrl: { type: string }
+        pricePaise: { type: integer, format: int64, description: Lowest variant price }
+        mrpPaise: { type: integer, format: int64 }
+        discountPct: { type: integer }
+        inStock: { type: boolean }
+        ratingAvg: { type: number }
+        ratingCount: { type: integer }
+        isLocal: { type: boolean }
+        verifiedSeller: { type: boolean }
+    FacetCount:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: string }
+        label: { type: string }
+        count: { type: integer, format: int64 }
+    SpecFacet:
+      type: object
+      required: [key, label, type]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        type: { type: string, enum: [number, text, enum, multi, boolean] }
+        unit: { type: string }
+        options: { type: array, items: { $ref: "#/components/schemas/FacetCount" } }
+        min: { type: number }
+        max: { type: number }
+    SearchResult:
+      type: object
+      required: [items, total, page, pageSize, facets]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ProductCard" } }
+        total: { type: integer, format: int64 }
+        page: { type: integer }
+        pageSize: { type: integer }
+        facets:
+          type: object
+          required: [categories, brands, specs]
+          properties:
+            categories: { type: array, items: { $ref: "#/components/schemas/FacetCount" } }
+            brands: { type: array, items: { $ref: "#/components/schemas/FacetCount" } }
+            price: { type: array, items: { type: integer, format: int64 }, minItems: 2, maxItems: 2, description: "[lowest, highest] price in paise" }
+            specs: { type: array, items: { $ref: "#/components/schemas/SpecFacet" } }
+        category:
+          type: object
+          required: [slug, name]
+          properties:
+            slug: { type: string }
+            name: { type: string }
+            icon: { type: string }
+            parentSlug: { type: string }
+            parentName: { type: string }
+        ignoredFilters: { type: array, items: { type: string }, description: Spec filters this category does not have }
+    Suggestion:
+      type: object
+      required: [kind, text]
+      properties:
+        kind: { type: string, enum: [product, brand, category] }
+        text: { type: string }
+        slug: { type: string }
+        coverUrl: { type: string }
+        brand: { type: string }
     Health:
       type: object
       required: [status, version, mode]

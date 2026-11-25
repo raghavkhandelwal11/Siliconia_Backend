@@ -40,6 +40,10 @@ admin: ## Create an admin (max 3): make admin PHONE=9876543210 NAME="Asha"
 	@test -n "$(PHONE)" -a -n "$(NAME)" || (echo 'usage: make admin PHONE=<10 digits> NAME="<name>"'; exit 2)
 	$(COMPOSE) run --rm --no-deps api /usr/local/bin/admin create --phone "$(PHONE)" --name "$(NAME)"
 
+.PHONY: demo
+demo: ## Add the demo store (about 24 products with photos); runs once
+	$(COMPOSE) run --rm --no-deps api /usr/local/bin/demo
+
 .PHONY: test-integration
 test-integration: ## Integration tests against the Compose PostgreSQL (make up first)
 	$(COMPOSE) exec -T postgres psql -U siliconia -tc "SELECT 1 FROM pg_database WHERE datname='siliconia_test'" | grep -q 1 || \
