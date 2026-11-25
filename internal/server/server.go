@@ -13,6 +13,7 @@ import (
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/health"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/httpx"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/platform/ratelimit"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/product"
 	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/seller"
 )
 
@@ -29,6 +30,7 @@ type Deps struct {
 	Auth        *auth.Handler
 	Catalogue   *catalogue.Handler
 	Seller      *seller.Handler
+	Product     *product.Handler
 }
 
 // New returns the root handler.
@@ -49,12 +51,18 @@ func New(d Deps) http.Handler {
 		if d.Catalogue != nil {
 			d.Catalogue.Routes(api)
 		}
+		if d.Product != nil {
+			d.Product.PublicRoutes(api)
+		}
 		if d.Auth != nil {
 			api.Group(func(api chi.Router) {
 				api.Use(auth.Authenticate(d.AuthService), auth.CSRF)
 				d.Auth.Routes(api)
 				if d.Seller != nil {
 					d.Seller.Routes(api)
+				}
+				if d.Product != nil {
+					d.Product.Routes(api)
 				}
 			})
 		}

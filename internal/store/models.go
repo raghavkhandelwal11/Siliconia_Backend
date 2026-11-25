@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AccountRole string
@@ -104,6 +105,48 @@ func (ns NullApprovalStatus) Value() (driver.Value, error) {
 	return string(ns.ApprovalStatus), nil
 }
 
+type LotKind string
+
+const (
+	LotKindSELLER       LotKind = "SELLER"
+	LotKindLAUNCHNORMAL LotKind = "LAUNCH_NORMAL"
+)
+
+func (e *LotKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LotKind(s)
+	case string:
+		*e = LotKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LotKind: %T", src)
+	}
+	return nil
+}
+
+type NullLotKind struct {
+	LotKind LotKind `json:"lotKind"`
+	Valid   bool    `json:"valid"` // Valid is true if LotKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLotKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.LotKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LotKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLotKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LotKind), nil
+}
+
 type Account struct {
 	ID              uuid.UUID      `json:"id"`
 	Role            AccountRole    `json:"role"`
@@ -179,6 +222,18 @@ type IdempotencyKey struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+type InventoryLot struct {
+	ID            uuid.UUID  `json:"id"`
+	VariantID     uuid.UUID  `json:"variantId"`
+	OwnerSellerID uuid.UUID  `json:"ownerSellerId"`
+	Kind          LotKind    `json:"kind"`
+	LaunchID      *uuid.UUID `json:"launchId"`
+	Quantity      int32      `json:"quantity"`
+	Reserved      int32      `json:"reserved"`
+	Sold          int32      `json:"sold"`
+	UnitCostPaise *int64     `json:"unitCostPaise"`
+}
+
 type KycRecord struct {
 	ID           uuid.UUID `json:"id"`
 	AccountID    uuid.UUID `json:"accountId"`
@@ -217,6 +272,37 @@ type ProcessedEvent struct {
 	Consumer    string    `json:"consumer"`
 	EventID     uuid.UUID `json:"eventId"`
 	ProcessedAt time.Time `json:"processedAt"`
+}
+
+type Product struct {
+	ID            uuid.UUID      `json:"id"`
+	SellerID      uuid.UUID      `json:"sellerId"`
+	CategoryID    uuid.UUID      `json:"categoryId"`
+	Slug          string         `json:"slug"`
+	Name          string         `json:"name"`
+	Brand         string         `json:"brand"`
+	Model         string         `json:"model"`
+	Description   string         `json:"description"`
+	Warranty      string         `json:"warranty"`
+	OriginCountry string         `json:"originCountry"`
+	IsLocal       bool           `json:"isLocal"`
+	Specs         []byte         `json:"specs"`
+	Status        string         `json:"status"`
+	Search        interface{}    `json:"search"`
+	RatingAvg     pgtype.Numeric `json:"ratingAvg"`
+	RatingCount   int32          `json:"ratingCount"`
+	IsSynthetic   bool           `json:"isSynthetic"`
+	PublishedAt   *time.Time     `json:"publishedAt"`
+	CreatedAt     time.Time      `json:"createdAt"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
+	Version       int32          `json:"version"`
+}
+
+type ProductImage struct {
+	ProductID uuid.UUID `json:"productId"`
+	UploadID  uuid.UUID `json:"uploadId"`
+	Position  int32     `json:"position"`
+	Alt       string    `json:"alt"`
 }
 
 type SellerProfile struct {
@@ -260,6 +346,28 @@ type Session struct {
 	LastUsedAt      time.Time       `json:"lastUsedAt"`
 	ExpiresAt       time.Time       `json:"expiresAt"`
 	RevokedAt       *time.Time      `json:"revokedAt"`
+}
+
+type Upload struct {
+	ID          uuid.UUID `json:"id"`
+	OwnerID     uuid.UUID `json:"ownerId"`
+	Purpose     string    `json:"purpose"`
+	StorageKey  string    `json:"storageKey"`
+	ContentType string    `json:"contentType"`
+	Bytes       int32     `json:"bytes"`
+	Width       int32     `json:"width"`
+	Height      int32     `json:"height"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+type Variant struct {
+	ID         uuid.UUID `json:"id"`
+	ProductID  uuid.UUID `json:"productId"`
+	Sku        string    `json:"sku"`
+	Attrs      []byte    `json:"attrs"`
+	MrpPaise   int64     `json:"mrpPaise"`
+	PricePaise int64     `json:"pricePaise"`
+	Position   int32     `json:"position"`
 }
 
 type WebhookEvent struct {

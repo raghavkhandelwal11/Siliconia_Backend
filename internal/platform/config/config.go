@@ -43,6 +43,14 @@ type Config struct {
 	ProviderKYC      string
 	SimKYCURL        string
 
+	// S3-compatible object storage: SeaweedFS (local, VM) or Cloudflare R2.
+	StorageEndpoint    string
+	StorageAccessKey   string
+	StorageSecretKey   string
+	StorageBucketMedia string
+	StorageRegion      string
+	StorageUseSSL      bool
+
 	FeatureTestInbox bool
 
 	// Rate limits for unauthenticated traffic (per IP, per minute).
@@ -75,6 +83,12 @@ func Load() (Config, error) {
 		SimNotifyURL:            env("SIM_NOTIFY_URL", "http://localhost:9005"),
 		ProviderKYC:             env("PROVIDER_KYC", "sim"),
 		SimKYCURL:               env("SIM_KYC_URL", "http://localhost:9004"),
+		StorageEndpoint:         env("STORAGE_ENDPOINT", "localhost:8333"),
+		StorageAccessKey:        os.Getenv("STORAGE_ACCESS_KEY"),
+		StorageSecretKey:        os.Getenv("STORAGE_SECRET_KEY"),
+		StorageBucketMedia:      env("STORAGE_BUCKET_MEDIA", "siliconics-media"),
+		StorageRegion:           env("STORAGE_REGION", "us-east-1"),
+		StorageUseSSL:           envBool("STORAGE_USE_SSL", false),
 		FeatureTestInbox:        envBool("FEATURE_TEST_INBOX", true),
 		GuestRateLimitPerMinute: envInt("RATELIMIT_GUEST_PER_MINUTE", 60),
 		AuthSigningKey:          os.Getenv("AUTH_SIGNING_KEY"),
@@ -92,6 +106,8 @@ func Load() (Config, error) {
 		c.AuthSigningKey = orDefault(c.AuthSigningKey, DevKey("auth-signing"))
 		c.OTPPepper = orDefault(c.OTPPepper, DevKey("otp-pepper"))
 		c.EncryptionMasterKey = orDefault(c.EncryptionMasterKey, DevKey("encryption-master"))
+		c.StorageAccessKey = orDefault(c.StorageAccessKey, "siliconics-local")
+		c.StorageSecretKey = orDefault(c.StorageSecretKey, DevKey("storage")[:32])
 	}
 	return c, c.validate()
 }
