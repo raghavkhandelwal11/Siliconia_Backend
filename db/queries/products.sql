@@ -98,3 +98,18 @@ INSERT INTO product_images (product_id, upload_id, position, alt) VALUES ($1, $2
 
 -- name: GetActiveCategory :one
 SELECT * FROM categories WHERE id = $1 AND status = 'ACTIVE';
+
+-- name: GetPublicProduct :one
+-- A live product from an active, approved seller (what shoppers may see).
+SELECT sqlc.embed(p), sp.store_name, sp.verified_tag, sp.account_id AS seller_account
+FROM products p
+JOIN accounts a ON a.id = p.seller_id AND a.status = 'ACTIVE' AND a.approval = 'APPROVED'
+JOIN seller_profiles sp ON sp.account_id = p.seller_id
+WHERE p.slug = $1 AND p.status = 'ACTIVE';
+
+-- name: GetPublicProductByID :one
+SELECT sqlc.embed(p), sp.store_name, sp.verified_tag, sp.account_id AS seller_account
+FROM products p
+JOIN accounts a ON a.id = p.seller_id AND a.status = 'ACTIVE' AND a.approval = 'APPROVED'
+JOIN seller_profiles sp ON sp.account_id = p.seller_id
+WHERE p.id = $1 AND p.status = 'ACTIVE';
