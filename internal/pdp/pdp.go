@@ -257,18 +257,20 @@ func (s *Service) LiveBlock(ctx context.Context, productID uuid.UUID, viewer *au
 	return out, nil
 }
 
-// actions maps the viewer's role to the action area (UI-PUB-05). Checkout
-// (buy now) arrives with T2.3, launch deals in M3, creators and promoters in M4.
+// actions maps the viewer's role to the action area (UI-PUB-05). Launch deals
+// arrive in M3, creators and promoters in M4.
 func actions(role auth.Role, viewer *auth.Claims, sellerID, productID uuid.UUID, inStock bool) []Action {
 	cart := Action{Key: "add_to_cart", Enabled: inStock}
+	buy := Action{Key: "buy_now", Enabled: inStock}
 	if !inStock {
-		cart.Reason = "OUT_OF_STOCK"
+		cart.Reason, buy.Reason = "OUT_OF_STOCK", "OUT_OF_STOCK"
 	}
 	switch role {
 	case "": // guests can fill a cart; saving needs an account
-		return []Action{cart, {Key: "buy_now", Reason: "COMING_M2"}, {Key: "wishlist", Reason: "SIGN_IN"}}
+		guestBuy := Action{Key: "buy_now", Reason: "SIGN_IN"}
+		return []Action{cart, guestBuy, {Key: "wishlist", Reason: "SIGN_IN"}}
 	case auth.RoleBuyer:
-		return []Action{cart, {Key: "buy_now", Reason: "COMING_M2"}, {Key: "wishlist", Enabled: true}}
+		return []Action{buy, cart, {Key: "wishlist", Enabled: true}}
 	case auth.RoleSeller:
 		if viewer.Subject == sellerID {
 			return []Action{{Key: "edit", Enabled: true, Href: fmt.Sprintf("/seller/products/%s", productID)}}
