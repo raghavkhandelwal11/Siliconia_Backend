@@ -23,10 +23,11 @@ func Label(sh Shipment) []byte {
 		text string
 	}
 	lines := []line{
-		{9, true, "SILICONICS  .  sim-ship  .  TEST LABEL, NOT FOR REAL SHIPPING"},
+		{8, true, "SILICONICS . sim-ship . TEST LABEL, NOT FOR REAL USE"},
 		{22, true, sh.AWB},
 		{11, true, cod},
-		{9, false, fmt.Sprintf("%s  .  ref %s  .  %d g", sh.Kind, sh.Ref, weight)},
+		{9, false, fmt.Sprintf("%s  .  %d g", sh.Kind, weight)},
+		{7, false, "Ref " + sh.Ref},
 		{9, true, "DELIVER TO"},
 	}
 	addr := func(a Address) {
