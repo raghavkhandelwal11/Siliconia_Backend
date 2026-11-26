@@ -1,9 +1,14 @@
 package checkout_test
 
 import (
+	"net/http"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/auth"
 )
 
 // TestNoCrossAccountAccess has a second buyer and a second seller try every
@@ -92,5 +97,52 @@ func TestNoCrossAccountAccess(t *testing.T) {
 		if st2, out := draft.do("POST", "/seller/products/"+p["id"].(string)+"/status", map[string]string{"status": "ACTIVE"}, true); st2 < 400 {
 			t.Errorf("unapproved seller published a product: %d %v", st2, out)
 		}
+	}
+}
+
+// TestSignInAfterSignOutWithGuestCart: the guest-cart device cookie outlives
+// the session, so the CSRF token must survive sign-out (and be re-issued on
+// any read if it is missing), or every later sign-in fails with CSRF_FAILED.
+func TestSignInAfterSignOutWithGuestCart(t *testing.T) {
+	e := setup(t)
+	variant, _, _ := e.listed("Volt Store", "Volt Cell", 99900, 5)
+	c := e.browser()
+	if st, out := c.do("PUT", "/cart/items/"+variant.String(), map[string]int{"qty": 1}, false); st != 200 {
+		t.Fatalf("guest cart: %d %v", st, out)
+	}
+	if c.cookie(auth.CookieDevice) == "" {
+		t.Fatal("no device cookie")
+	}
+	sendOTP := func() int {
+		e.mr.FastForward(time.Minute)
+		st, _ := c.do("POST", "/auth/otp/send", map[string]string{"phone": "9876500071", "role": "BUYER"}, true)
+		return st
+	}
+
+	// Sign in (with the token, as the web app sends it) and out: the token is replaced, not deleted.
+	e.mr.FastForward(time.Minute)
+	_, ch := c.do("POST", "/auth/otp/send", map[string]string{"phone": "9876500071", "role": "BUYER"}, true)
+	if st, o := c.do("POST", "/auth/otp/verify", map[string]string{"challengeId": ch["challengeId"].(string), "code": e.inbox.last["+919876500071"]}, true); st != 200 {
+		t.Fatalf("sign-in: %d %v", st, o)
+	}
+	if st, _ := c.do("POST", "/auth/logout", nil, true); st != 204 {
+		t.Fatalf("logout: %d", st)
+	}
+	if c.cookie(auth.CookieCSRF) == "" {
+		t.Fatal("sign-out left no CSRF token")
+	}
+	if st := sendOTP(); st != 200 {
+		t.Fatalf("sign-in after sign-out: %d", st)
+	}
+
+	// A browser already stuck (device cookie, no token) recovers on its next page load.
+	u, _ := url.Parse(e.srv.URL)
+	c.jar.SetCookies(u, []*http.Cookie{{Name: auth.CookieCSRF, Value: "", Path: "/", MaxAge: -1}})
+	if st := sendOTP(); st != 403 {
+		t.Fatalf("stuck state not reproduced: %d", st)
+	}
+	c.do("GET", "/me", nil, false) // any read, as the sign-in page makes
+	if st := sendOTP(); st != 200 {
+		t.Fatalf("sign-in after reload: %d", st)
 	}
 }

@@ -60,6 +60,13 @@ func CSRF(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			// Make sure the browser holds a token for its next write. Without
+			// this, a device cookie that outlives the token (after sign-out or
+			// expiry) would fail every POST, sign-in included, until cookies
+			// were cleared.
+			if ck, err := r.Cookie(CookieCSRF); err != nil || ck.Value == "" {
+				setCSRF(w, requestIsHTTPS(r))
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -165,10 +172,24 @@ func (cw cookieWriter) set(w http.ResponseWriter, t Tokens) {
 	}
 }
 
+// clear signs the browser out. The CSRF token is replaced rather than deleted:
+// the guest-cart device cookie stays, so the next write still needs one.
 func (cw cookieWriter) clear(w http.ResponseWriter) {
-	for _, c := range []struct{ name, path string }{{CookieAccess, "/"}, {CookieRefresh, refreshPath}, {CookieCSRF, "/"}} {
-		http.SetCookie(w, &http.Cookie{Name: c.name, Value: "", Path: c.path, MaxAge: -1, HttpOnly: c.name != CookieCSRF, Secure: cw.secure, SameSite: http.SameSiteLaxMode})
+	for _, c := range []struct{ name, path string }{{CookieAccess, "/"}, {CookieRefresh, refreshPath}} {
+		http.SetCookie(w, &http.Cookie{Name: c.name, Value: "", Path: c.path, MaxAge: -1, HttpOnly: true, Secure: cw.secure, SameSite: http.SameSiteLaxMode})
 	}
+	setCSRF(w, cw.secure)
+}
+
+// setCSRF issues a fresh double-submit token, readable by the web app.
+func setCSRF(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{Name: CookieCSRF, Value: newCSRF(), Path: "/", Secure: secure,
+		SameSite: http.SameSiteLaxMode, MaxAge: int(RefreshTTL.Seconds())})
+}
+
+// requestIsHTTPS reports whether the browser used HTTPS (directly or via Caddy).
+func requestIsHTTPS(r *http.Request) bool {
+	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 func newCSRF() string {
