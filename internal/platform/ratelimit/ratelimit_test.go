@@ -96,11 +96,14 @@ func TestInternalKeySkipsPerIPLimit(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w.Code
 	}
-	if call("") != 200 || call("") != 429 {
-		t.Fatal("visitor limit not applied")
+	first, second := call(""), call("")
+	if first != 200 || second != 429 {
+		t.Fatalf("visitor limit not applied: %d then %d", first, second)
 	}
-	if call(key) != 200 || call(key) != 200 {
-		t.Fatal("web server key was limited")
+	for i := 0; i < 3; i++ {
+		if got := call(key); got != 200 {
+			t.Fatalf("web server key was limited on call %d: %d", i+1, got)
+		}
 	}
 	if call("wrong-key-wrong-key-wrong-key-wrong-key") != 429 {
 		t.Fatal("a wrong key skipped the limit")
