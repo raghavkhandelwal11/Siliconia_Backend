@@ -297,6 +297,15 @@ func TestOnboardingGuards(t *testing.T) {
 	// An admin viewing as a seller cannot decide or submit.
 	a := e.admin()
 	a.must("POST", "/admin/role-switch", map[string]string{"role": "SELLER"}, 200)
+	// The portal opens as an empty, read-only preview instead of failing.
+	if st, app := a.do("GET", "/seller/application", nil); st != 200 || app["approval"] != "APPROVED" || app["editable"] != false {
+		t.Fatalf("acting admin portal: %d %v", st, app)
+	}
+	var profiles int
+	_ = e.auth.Pool.QueryRow(context.Background(), `SELECT count(*) FROM seller_profiles p JOIN accounts a ON a.id = p.account_id WHERE a.role = 'ADMIN'`).Scan(&profiles)
+	if profiles != 0 {
+		t.Fatal("the preview created a seller profile for the admin")
+	}
 	if st, _ := a.do("PUT", "/seller/application", b); st != 403 {
 		t.Fatalf("acting admin edit: %d", st)
 	}
