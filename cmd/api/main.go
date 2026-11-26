@@ -79,7 +79,7 @@ func main() {
 	}
 	defer rdb.Close()
 
-	limiter := ratelimit.New(rdb)
+	limiter := ratelimit.New(rdb).TrustInternal(cfg.InternalAPIKey)
 	authSvc, authHandler, err := buildAuth(ctx, cfg, pool, rdb, limiter, log)
 	if err != nil {
 		log.Error("auth", "err", err)

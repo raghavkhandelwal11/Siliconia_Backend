@@ -4,6 +4,7 @@ package ratelimit
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -32,12 +33,32 @@ return {1, 0}`)
 
 // Limiter checks limits for a named group, e.g. "otp-send" or "guest".
 type Limiter struct {
-	client *redis.Client
-	now    func() time.Time
+	internal []byte
+	client   *redis.Client
+	now      func() time.Time
 }
 
 // New creates a limiter.
 func New(c *redis.Client) *Limiter { return &Limiter{client: c, now: time.Now} }
+
+// InternalHeader carries the web server's key on its server-side API calls.
+const InternalHeader = "X-Siliconics-Internal"
+
+// TrustInternal lets requests carrying key in InternalHeader skip the per-IP
+// limits. The web server renders pages for every visitor through one address,
+// so counting its calls per IP would throttle all visitors together. Keys
+// shorter than 32 characters are ignored.
+func (l *Limiter) TrustInternal(key string) *Limiter {
+	if len(key) >= 32 {
+		l.internal = []byte(key)
+	}
+	return l
+}
+
+func (l *Limiter) isInternal(r *http.Request) bool {
+	got := r.Header.Get(InternalHeader)
+	return len(l.internal) > 0 && got != "" && subtle.ConstantTimeCompare([]byte(got), l.internal) == 1
+}
 
 // Result is the outcome of one check.
 type Result struct {
@@ -65,6 +86,10 @@ func (l *Limiter) Allow(ctx context.Context, group, subject string, limit int, w
 func (l *Limiter) PerIP(group string, limit int, window time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if l.isInternal(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			res, err := l.Allow(r.Context(), group, httpx.ClientIP(r), limit, window)
 			if err == nil && !res.Allowed {
 				secs := int(res.RetryAfter.Seconds())

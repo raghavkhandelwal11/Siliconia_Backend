@@ -9,6 +9,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/raghavkhandelwal11/Siliconia_Backend/internal/launch"
 	"image"
 	"image/color"
 	"image/png"
@@ -115,6 +117,21 @@ var products = []demo{
 	{"robot-cleaners", "round", 165, "Aero Clean R5", "Aero", false, "A LiDAR robot vacuum and mop with 5000 Pa suction and a self-emptying dock.", "1 year manufacturer warranty",
 		map[string]any{"suction_pa": 5000.0, "runtime_min": 180.0, "mapping": "LiDAR", "mop": true, "auto_empty": true},
 		[]variant{{"AEROR5", "White", 39999, 29999, 6}}},
+	{"action-cameras", "camera", 20, "Zenith Action 4K", "Zenith", false, "A waterproof 4K action camera with stabilisation that keeps rides and treks smooth.", "1 year manufacturer warranty",
+		map[string]any{"video": "4K", "fps": 60.0, "waterproof_m": 10.0, "stabilisation": true},
+		[]variant{{"ZENACT4K", "Black", 24999, 15999, 30}}},
+	{"dash-cams", "camera", 210, "Orbit Drive Duo", "Orbit", true, "A front and rear 2K dash cam with night vision and parking mode, made in India.", "1 year manufacturer warranty",
+		map[string]any{"resolution": "2K", "channels": "Front + rear", "night_vision": true, "parking_mode": true, "gps": true},
+		[]variant{{"ORBITDUO2K", "Black", 9999, 5499, 45}}},
+	{"consoles", "brick", 270, "Volt Play Handheld", "Volt", false, "A PC handheld console with a 7-inch 120 Hz screen for games at home and on the go.", "1 year manufacturer warranty",
+		map[string]any{"platform": "PC handheld", "storage_gb": 512.0, "edition": "Standard"},
+		[]variant{{"VOLTPLAY512", "White", 64999, 54999, 12}}},
+	{"personal-care", "brick", 320, "Pulse Groom Trimmer", "Pulse", true, "A cordless beard trimmer with 40 length settings and 120 minutes of runtime.", "2 year warranty",
+		map[string]any{"type": "Trimmer", "power": "Both", "runtime_min": 120.0},
+		[]variant{{"PULSEGROOM", "Teal", 2499, 1299, 150}}},
+	{"ups-inverters", "brick", 45, "Kosmo PowerSafe 1100", "Kosmo", true, "An 1100 VA pure sine wave inverter that keeps the fridge, fans and Wi-Fi running in power cuts.", "2 year warranty",
+		map[string]any{"type": "Inverter", "va": 1100.0, "battery_type": "Not included", "backup_min": 180.0},
+		[]variant{{"KOSMOPS1100", "Grey", 8999, 6499, 25}}},
 }
 
 func main() {
@@ -131,12 +148,6 @@ func main() {
 	}
 	defer pool.Close()
 	q := store.New(pool)
-	if _, err := q.GetAccountByPhoneRole(ctx, store.GetAccountByPhoneRoleParams{PhoneE164: ptr(demoPhone), Role: store.AccountRoleSELLER}); err == nil {
-		log.Info("demo store already present; nothing to do")
-		return
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		fail(log, err)
-	}
 	media, err := storage.NewS3(ctx, storage.S3Config{
 		Endpoint: cfg.StorageEndpoint, AccessKey: cfg.StorageAccessKey, SecretKey: cfg.StorageSecretKey,
 		Bucket: cfg.StorageBucketMedia, Region: cfg.StorageRegion, UseSSL: cfg.StorageUseSSL,
@@ -144,27 +155,76 @@ func main() {
 	if err != nil {
 		fail(log, err)
 	}
-	seller, _ := uuid.NewV7()
-	now := time.Now()
-	if _, err := q.CreateAccount(ctx, store.CreateAccountParams{
-		ID: seller, Role: store.AccountRoleSELLER, PhoneE164: ptr(demoPhone), PhoneVerifiedAt: &now,
-		Name: "Siliconics Demo Store", Approval: store.ApprovalStatusAPPROVED,
-	}); err != nil {
+	// Safe to run again: an existing demo store only gets what it is missing.
+	var seller uuid.UUID
+	if acc, err := q.GetAccountByPhoneRole(ctx, store.GetAccountByPhoneRoleParams{PhoneE164: ptr(demoPhone), Role: store.AccountRoleSELLER}); err == nil {
+		seller = acc.ID
+	} else if !errors.Is(err, pgx.ErrNoRows) {
 		fail(log, err)
-	}
-	// The pickup address lets testers ship demo orders through sim-ship.
-	if _, err := pool.Exec(ctx, `INSERT INTO seller_profiles (account_id, business_type, legal_name, store_name, verified_tag, submitted_at, decided_at, pickup_address, is_platform)
-		VALUES ($1, 'PRIVATE_LIMITED', 'Siliconics Demo Store Pvt Ltd', 'Siliconics Demo Store', true, now(), now(),
-		'{"line1":"Plot 4, Sector 63","city":"Noida","state":"Uttar Pradesh","pincode":"201301","phone":"9999900099"}', true)`, seller); err != nil {
-		fail(log, err)
+	} else {
+		seller, _ = uuid.NewV7()
+		now := time.Now()
+		if _, err := q.CreateAccount(ctx, store.CreateAccountParams{
+			ID: seller, Role: store.AccountRoleSELLER, PhoneE164: ptr(demoPhone), PhoneVerifiedAt: &now,
+			Name: "Siliconics Demo Store", Approval: store.ApprovalStatusAPPROVED,
+		}); err != nil {
+			fail(log, err)
+		}
+		// The pickup address lets testers ship demo orders through sim-ship.
+		if _, err := pool.Exec(ctx, `INSERT INTO seller_profiles (account_id, business_type, legal_name, store_name, verified_tag, submitted_at, decided_at, pickup_address, is_platform)
+			VALUES ($1, 'PRIVATE_LIMITED', 'Siliconics Demo Store Pvt Ltd', 'Siliconics Demo Store', true, now(), now(),
+			'{"line1":"Plot 4, Sector 63","city":"Noida","state":"Uttar Pradesh","pincode":"201301","phone":"9999900099"}', true)`, seller); err != nil {
+			fail(log, err)
+		}
 	}
 	svc := &product.Service{Pool: pool, Q: q, Store: media, Log: log}
+	added := 0
 	for _, d := range products {
+		var exists bool
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM products WHERE seller_id = $1 AND name = $2)`, seller, d.name).Scan(&exists); err != nil {
+			fail(log, err)
+		}
+		if exists {
+			continue
+		}
 		if err := add(ctx, pool, svc, seller, d); err != nil {
 			fail(log, fmt.Errorf("%s: %w", d.name, err))
 		}
+		added++
 	}
-	log.Info("demo store ready", "products", len(products), "seller_phone", demoPhone)
+	if err := scheduleLaunch(ctx, pool, q, seller); err != nil {
+		fail(log, fmt.Errorf("launch: %w", err))
+	}
+	log.Info("demo store ready", "added", added, "products", len(products), "seller_phone", demoPhone)
+}
+
+// scheduleLaunch puts a members-only launch deal on the calendar (three days
+// out, 18:00 IST) unless one is already coming up, so testers can see the
+// countdown, join the waiting room and buy on launch day.
+func scheduleLaunch(ctx context.Context, pool *pgxpool.Pool, q *store.Queries, seller uuid.UUID) error {
+	var upcoming bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM launches WHERE status IN ('SCHEDULED', 'LIVE'))`).Scan(&upcoming); err != nil || upcoming {
+		return err
+	}
+	var productID, variantID uuid.UUID
+	var price int64
+	if err := pool.QueryRow(ctx, `SELECT p.id, v.id, v.price_paise FROM products p JOIN variants v ON v.product_id = p.id
+		WHERE p.seller_id = $1 AND p.name = 'Nova 5G (8 GB, 128 GB)' ORDER BY v.position LIMIT 1`, seller).Scan(&productID, &variantID, &price); err != nil {
+		return err
+	}
+	// The launch is recorded as created by the first admin, or by the platform store before any admin exists.
+	createdBy := seller
+	_ = pool.QueryRow(ctx, `SELECT id FROM accounts WHERE role = 'ADMIN' AND status = 'ACTIVE' ORDER BY created_at LIMIT 1`).Scan(&createdBy)
+	ist := time.FixedZone("IST", 19800)
+	day := time.Now().In(ist).AddDate(0, 0, 3)
+	svc := &launch.Service{Pool: pool, Q: q}
+	l, err := svc.Create(ctx, createdBy, launch.Draft{ProductID: productID, VariantID: variantID, SellerID: seller,
+		UnitsBought: 200, UnitCostPaise: price * 55 / 100, NormalPricePaise: price, PerMemberLimit: 1,
+		StartsAt: time.Date(day.Year(), day.Month(), day.Day(), 18, 0, 0, 0, ist)})
+	if err != nil {
+		return err
+	}
+	return svc.Schedule(ctx, l.ID)
 }
 
 func add(ctx context.Context, pool interface {

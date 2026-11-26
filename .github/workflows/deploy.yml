@@ -1,0 +1,36 @@
+# Deploys to the Oracle Cloud VM after CI passes on main (T6.1). The VM runs
+# deploy/vm/deploy.sh, which rolls back by itself if the new version is not
+# healthy. Off until the repository variable DEPLOY_ENABLED is "true" and the
+# secrets VM_HOST, VM_USER and VM_SSH_KEY exist.
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploy over SSH
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/vm && chmod 600 ~/.ssh/vm
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/vm "$VM_USER@$VM_HOST" 'bash /opt/siliconics/siliconia_backend/deploy/vm/deploy.sh'
