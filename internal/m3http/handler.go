@@ -40,8 +40,8 @@ func (h *Handler) ViewerRoutes(r chi.Router) {
 
 // Routes need a session and CSRF.
 func (h *Handler) Routes(r chi.Router) {
-	r.Get("/electrons", h.balance)
-	r.Get("/electrons/ledger", h.ledger)
+	r.With(auth.RequireAuth).Get("/electrons", h.balance)
+	r.With(auth.RequireAuth).Get("/electrons/ledger", h.ledger)
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireRole(auth.RoleBuyer))
 		r.Get("/membership", h.getMembership)

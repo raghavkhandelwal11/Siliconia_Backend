@@ -23,8 +23,8 @@ func (h *Handler) PublicRoutes(r chi.Router) {
 
 // Routes need a session and CSRF.
 func (h *Handler) Routes(r chi.Router) {
-	r.Get("/me/legal/pending", h.pendingLegal)
-	r.Post("/me/legal/accept", h.acceptLegal)
+	r.With(auth.RequireAuth).Get("/me/legal/pending", h.pendingLegal)
+	r.With(auth.RequireAuth).Post("/me/legal/accept", h.acceptLegal)
 	r.Group(func(r chi.Router) {
 		r.Use(auth.RequireRole(auth.RoleSeller))
 		r.Get("/seller/payouts", h.sellerPayouts)
