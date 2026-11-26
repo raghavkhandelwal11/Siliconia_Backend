@@ -89,10 +89,10 @@ func main() {
 		log.Error("kyc", "err", "only PROVIDER_KYC=sim exists in this build (paid adapters: paid-later/)")
 		os.Exit(1)
 	}
-	media, err := storage.NewS3(ctx, storage.S3Config{
+	media, err := storage.Open(ctx, storage.Options{Driver: cfg.StorageDriver, Dir: cfg.StorageDir, S3: storage.S3Config{
 		Endpoint: cfg.StorageEndpoint, AccessKey: cfg.StorageAccessKey, SecretKey: cfg.StorageSecretKey,
 		Bucket: cfg.StorageBucketMedia, Region: cfg.StorageRegion, UseSSL: cfg.StorageUseSSL,
-	})
+	}})
 	if err != nil {
 		log.Error("storage", "err", err)
 		os.Exit(1)

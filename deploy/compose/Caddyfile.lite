@@ -1,0 +1,36 @@
+# Lite server: backend only. The web app is on Netlify (FRONTEND_URL), which
+# forwards /api and /test-inbox here; the payment page (/pay) is opened here
+# directly. Anything else is sent to the web app.
+
+{$SITE_ADDRESS}
+
+encode zstd gzip
+
+header {
+	Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	X-Content-Type-Options "nosniff"
+	Referrer-Policy "strict-origin-when-cross-origin"
+	-Server
+}
+
+handle /internal/* {
+	respond 404
+}
+
+handle /api/* {
+	reverse_proxy api:8080 {
+		flush_interval -1
+	}
+}
+
+handle /test-inbox* {
+	reverse_proxy sim-notify:9005
+}
+
+handle /pay/* {
+	reverse_proxy sim-pay:9001
+}
+
+handle {
+	redir {$FRONTEND_URL}{uri} 302
+}
