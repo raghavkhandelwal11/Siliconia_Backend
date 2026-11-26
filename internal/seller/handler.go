@@ -52,8 +52,11 @@ func ownerOnly(next http.Handler) http.Handler {
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 	c, _ := auth.ClaimsFrom(r.Context())
-	if c.Role != auth.RoleSeller { // admin viewing as seller has no application of their own
-		httpx.WriteError(w, r, httpx.ErrNotFound)
+	if c.Role != auth.RoleSeller {
+		// An admin viewing as a seller has no store of their own: show an empty,
+		// read-only portal so the seller pages can be previewed (FR-ROLE-07).
+		// Nothing is written; every change is still refused by ownerOnly.
+		httpx.WriteJSON(w, http.StatusOK, Application{AccountID: c.Subject, Approval: "APPROVED", PhoneVerified: true, Missing: []string{}})
 		return
 	}
 	reply(w, r, func() (any, error) { return h.Svc.Get(r.Context(), c.Subject) })

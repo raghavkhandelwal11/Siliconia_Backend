@@ -41,7 +41,8 @@ func (h *Handler) Routes(r chi.Router) {
 // sellerOnly keeps admins viewing as a seller out: they have no store.
 func sellerOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if c, _ := auth.ClaimsFrom(r.Context()); c.Role != auth.RoleSeller {
+		// Admins viewing as a seller may look (their own, empty, catalogue) but not change anything.
+		if c, _ := auth.ClaimsFrom(r.Context()); c.Role != auth.RoleSeller && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			httpx.WriteError(w, r, httpx.NewError(http.StatusForbidden, "SWITCH_BACK_REQUIRED", "Admins viewing as a seller have no products of their own"))
 			return
 		}
