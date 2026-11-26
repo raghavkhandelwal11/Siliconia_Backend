@@ -148,10 +148,10 @@ func main() {
 	}
 	defer pool.Close()
 	q := store.New(pool)
-	media, err := storage.NewS3(ctx, storage.S3Config{
+	media, err := storage.Open(ctx, storage.Options{Driver: cfg.StorageDriver, Dir: cfg.StorageDir, S3: storage.S3Config{
 		Endpoint: cfg.StorageEndpoint, AccessKey: cfg.StorageAccessKey, SecretKey: cfg.StorageSecretKey,
 		Bucket: cfg.StorageBucketMedia, Region: cfg.StorageRegion, UseSSL: cfg.StorageUseSSL,
-	})
+	}})
 	if err != nil {
 		fail(log, err)
 	}

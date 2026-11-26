@@ -1,0 +1,61 @@
+# Lite server overlay: the backend on a 1 GB machine (Oracle Always Free AMD
+# VM.Standard.E2.1.Micro). Measured use is about 250 MB.
+#   docker compose -f docker-compose.yml -f docker-compose.lite.yml up -d --no-build
+# Differences from the full stack: no web app (Netlify serves it), product
+# photos on disk instead of SeaweedFS, one API copy, small Postgres and Redis,
+# and prebuilt images from GHCR (BACKEND_IMAGE) because the VM is too small to compile.
+services:
+  postgres:
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40", "-c", "work_mem=2MB",
+      "-c", "maintenance_work_mem=32MB", "-c", "effective_cache_size=192MB"]
+    deploy: { resources: { limits: { memory: 256m } } }
+
+  redis:
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction"]
+    deploy: { resources: { limits: { memory: 96m } } }
+
+  seaweedfs:
+    profiles: ["s3"] # not started on the lite server
+
+  api:
+    environment:
+      STORAGE_DRIVER: disk
+      STORAGE_DIR: /data/media
+    volumes:
+      - media:/data/media
+    depends_on: !override
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    deploy: !override
+      replicas: 1
+      resources: { limits: { memory: 256m } }
+
+  worker:
+    environment:
+      STORAGE_DRIVER: disk
+      STORAGE_DIR: /data/media
+    volumes:
+      - media:/data/media
+    deploy: { resources: { limits: { memory: 192m } } }
+
+  sim-notify: { deploy: { resources: { limits: { memory: 64m } } } }
+  sim-kyc: { deploy: { resources: { limits: { memory: 64m } } } }
+  sim-pay: { deploy: { resources: { limits: { memory: 64m } } } }
+  sim-ship: { deploy: { resources: { limits: { memory: 64m } } } }
+  sim-payout: { deploy: { resources: { limits: { memory: 64m } } } }
+
+  caddy:
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+      FRONTEND_URL: ${FRONTEND_URL}
+    volumes: !override
+      - ./Caddyfile.lite:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+    ports: !override
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    depends_on: !override [api, sim-notify, sim-pay]
+    deploy: { resources: { limits: { memory: 96m } } }
+
+volumes:
+  media:

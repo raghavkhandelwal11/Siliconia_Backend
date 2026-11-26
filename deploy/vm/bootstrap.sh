@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# One-time setup of the Oracle Cloud Always Free VM (Ubuntu 24.04, ARM).
-#   curl -fsSL https://raw.githubusercontent.com/raghavkhandelwal11/Siliconia_Backend/main/deploy/vm/bootstrap.sh | sudo bash -s -- <name>.duckdns.org
+# One-time setup of the Oracle Cloud Always Free VM (Ubuntu 24.04).
+#   Ampere (4 cores, 24 GB): builds and runs everything, web app included.
+#     curl -fsSL .../deploy/vm/bootstrap.sh | sudo bash -s -- <name>.duckdns.org
+#   AMD micro (1 GB, "lite"): backend only, prebuilt images, web app on Netlify.
+#     curl -fsSL .../deploy/vm/bootstrap.sh | sudo SILICONICS_PROFILE=lite FRONTEND_URL=https://<site>.netlify.app bash -s -- <name>.duckdns.org
+#   (... = https://raw.githubusercontent.com/raghavkhandelwal11/Siliconia_Backend/main)
 # Installs Docker, opens ports 80/443 in the VM firewall, clones both repos to
 # /opt/siliconics, writes a production .env with fresh random secrets, installs
 # the nightly backup, then starts everything. Safe to run again.
@@ -8,6 +12,17 @@ set -euo pipefail
 DOMAIN="${1:?usage: bootstrap.sh <name>.duckdns.org}"
 ROOT=/opt/siliconics
 OWNER="${SUDO_USER:-ubuntu}"
+PROFILE="${SILICONICS_PROFILE:-full}"
+if [ "$PROFILE" = lite ] && [ -z "${FRONTEND_URL:-}" ]; then
+  echo "lite needs FRONTEND_URL=https://<site>.netlify.app" >&2; exit 2
+fi
+
+echo "==> Swap (a safety net for small machines)"
+if [ ! -f /swapfile ] && [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 3000000 ]; then
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  sysctl -q vm.swappiness=10 && echo 'vm.swappiness=10' > /etc/sysctl.d/90-siliconics.conf
+fi
 
 echo "==> Docker"
 if ! command -v docker >/dev/null; then
@@ -24,7 +39,9 @@ command -v netfilter-persistent >/dev/null && netfilter-persistent save >/dev/nu
 
 echo "==> Code"
 mkdir -p "$ROOT" && chown "$OWNER" "$ROOT"
-for repo in Siliconia_Backend:siliconia_backend Siliconia-Frontend:siliconia_frontend; do
+repos="Siliconia_Backend:siliconia_backend"
+[ "$PROFILE" = full ] && repos="$repos Siliconia-Frontend:siliconia_frontend"
+for repo in $repos; do
   name="${repo%%:*}" dir="$ROOT/${repo##*:}"
   [ -d "$dir/.git" ] || sudo -u "$OWNER" git clone -q "https://github.com/raghavkhandelwal11/$name.git" "$dir"
 done
@@ -49,6 +66,18 @@ if [ ! -f "$ENV" ]; then
   set_env SIM_PAY_PUBLIC_URL "https://$DOMAIN"
   set_env ALLOWED_ORIGINS "https://$DOMAIN"
   set_env SITE_ADDRESS "$DOMAIN"
+  set_env SILICONICS_PROFILE "$PROFILE"
+  if [ "$PROFILE" = lite ]; then
+    # Pages come from Netlify, which forwards /api here; payments return there.
+    set_env FRONTEND_URL "$FRONTEND_URL"
+    set_env PUBLIC_BASE_URL "$FRONTEND_URL"
+    set_env ALLOWED_ORIGINS "$FRONTEND_URL,https://$DOMAIN"
+    set_env STORAGE_DRIVER disk
+    set_env HTTP_PORT 80
+    set_env HTTPS_PORT 443
+    # Visitors reach the API through Netlify's few proxy addresses.
+    set_env RATELIMIT_GUEST_PER_MINUTE 600
+  fi
   for k in SIM_PAY_API_KEY SIM_PAY_WEBHOOK_SECRET SIM_SHIP_API_KEY SIM_SHIP_WEBHOOK_SECRET SIM_PAYOUT_API_KEY SIM_PAYOUT_WEBHOOK_SECRET STORAGE_SECRET_KEY TEST_INBOX_PASSWORD; do
     set_env "$k" "$(rnd 16)"
   done
@@ -70,4 +99,6 @@ sudo -u "$OWNER" -H bash "$ROOT/siliconia_backend/deploy/vm/deploy.sh"
 echo
 echo "Done. Open https://$DOMAIN (the certificate can take a minute on first start)."
 echo "Test inbox password: grep TEST_INBOX_PASSWORD $ENV"
-echo "Create an admin:     cd $ROOT/siliconia_backend && make admin PHONE=<10 digits> NAME=\"<name>\""
+echo "Demo data:           bash $ROOT/siliconia_backend/deploy/vm/run.sh demo"
+echo "Create an admin:     bash $ROOT/siliconia_backend/deploy/vm/run.sh admin create --phone <10 digits> --name \"<name>\""
+[ "$PROFILE" = lite ] && echo "Netlify:             set BACKEND_URL=https://$DOMAIN and INTERNAL_API_KEY=\$(grep ^INTERNAL_API_KEY= $ENV | cut -d= -f2), then redeploy"

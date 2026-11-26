@@ -6,7 +6,7 @@ name: deploy
 
 on:
   workflow_run:
-    workflows: [ci]
+    workflows: [images] # the lite server pulls the image this workflow publishes
     types: [completed]
     branches: [main]
   workflow_dispatch:

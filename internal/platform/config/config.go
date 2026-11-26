@@ -59,6 +59,8 @@ type Config struct {
 	SimPayoutSecret      string
 
 	// S3-compatible object storage: SeaweedFS (local, VM) or Cloudflare R2.
+	StorageDriver      string // "s3" (default) or "disk" for the lite server
+	StorageDir         string // where "disk" keeps files
 	StorageEndpoint    string
 	StorageAccessKey   string
 	StorageSecretKey   string
@@ -114,6 +116,8 @@ func Load() (Config, error) {
 		SimPayoutURL:            env("SIM_PAYOUT_URL", "http://localhost:9003"),
 		SimPayoutAPIKey:         os.Getenv("SIM_PAYOUT_API_KEY"),
 		SimPayoutSecret:         os.Getenv("SIM_PAYOUT_WEBHOOK_SECRET"),
+		StorageDriver:           env("STORAGE_DRIVER", "s3"),
+		StorageDir:              env("STORAGE_DIR", "/data/media"),
 		StorageEndpoint:         env("STORAGE_ENDPOINT", "localhost:8333"),
 		StorageAccessKey:        os.Getenv("STORAGE_ACCESS_KEY"),
 		StorageSecretKey:        os.Getenv("STORAGE_SECRET_KEY"),
