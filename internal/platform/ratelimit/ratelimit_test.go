@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,5 +79,36 @@ func TestPerIPMiddlewareReturns429(t *testing.T) {
 		if want == 429 && w.Header().Get("Retry-After") == "" {
 			t.Fatal("missing Retry-After")
 		}
+	}
+}
+
+func TestInternalKeySkipsPerIPLimit(t *testing.T) {
+	l, _ := newLimiter(t)
+	key := strings.Repeat("k", 40)
+	h := l.TrustInternal(key).PerIP("guest", 1, time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	call := func(header string) int {
+		r := httptest.NewRequest(http.MethodGet, "/x", nil)
+		r.RemoteAddr = "203.0.113.5:1000"
+		if header != "" {
+			r.Header.Set(InternalHeader, header)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	first, second := call(""), call("")
+	if first != 200 || second != 429 {
+		t.Fatalf("visitor limit not applied: %d then %d", first, second)
+	}
+	for i := 0; i < 3; i++ {
+		if got := call(key); got != 200 {
+			t.Fatalf("web server key was limited on call %d: %d", i+1, got)
+		}
+	}
+	if call("wrong-key-wrong-key-wrong-key-wrong-key") != 429 {
+		t.Fatal("a wrong key skipped the limit")
+	}
+	if New(nil).TrustInternal("short").isInternal(httptest.NewRequest(http.MethodGet, "/", nil)) {
+		t.Fatal("short keys must be ignored")
 	}
 }

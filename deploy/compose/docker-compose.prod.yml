@@ -1,0 +1,23 @@
+# Server overlay (T6.1): adds the web app and serves HTTPS on 80/443.
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Expects the frontend repo next to the backend repo (/opt/siliconics/...).
+services:
+  web:
+    build:
+      context: ../../../siliconia_frontend
+    image: siliconics-web:${APP_VERSION:-dev}
+    environment:
+      BACKEND_URL: http://api:8080 # private network; the internal key skips per-IP limits
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      NEXT_PUBLIC_TEST_MODE: "true"
+    restart: unless-stopped
+    deploy: { resources: { limits: { memory: 768m } } }
+
+  caddy:
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+      WEB_UPSTREAM: web:3000
+    ports: !override
+      - "80:80"
+      - "443:443"
+    depends_on: [api, sim-notify, sim-pay, web]

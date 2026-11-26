@@ -77,6 +77,7 @@ type Config struct {
 	EncryptionMasterKey string // AES-256 key for envelope encryption (TOTP secrets, KYC data)
 	CookieSecure        bool   // Secure cookies (true behind HTTPS)
 	SyntheticAPIURL     string // base URL the synthetic checks probe
+	InternalAPIKey      string // shared with the web server; its server-side calls skip per-IP limits
 	PublicBaseURL       string // e.g. http://localhost:8080; used for OAuth redirects
 	GoogleClientID      string
 	GoogleClientSecret  string
@@ -127,6 +128,7 @@ func Load() (Config, error) {
 		CookieSecure:            envBool("COOKIE_SECURE", false),
 		PublicBaseURL:           env("PUBLIC_BASE_URL", "http://localhost:8080"),
 		SyntheticAPIURL:         env("SYNTHETIC_API_URL", "http://localhost:8080"),
+		InternalAPIKey:          os.Getenv("INTERNAL_API_KEY"),
 		GoogleClientID:          os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret:      os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleIssuer:            env("GOOGLE_ISSUER", "https://accounts.google.com"),
