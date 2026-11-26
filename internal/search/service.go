@@ -89,10 +89,13 @@ type Service struct {
 const listing = `
 SELECT p.id, p.slug, p.name, p.brand, p.is_local, p.rating_avg::float8 AS rating_avg, p.rating_count, p.created_at,
        p.specs, p.category_id, p.search, sp.verified_tag,
+       to_tsvector('english', c.name || ' ' || coalesce(pc.name, '')) AS cat_search, c.name AS cat_name,
        pv.price_paise, pv.mrp_paise, st.available, st.sold, coalesce(cov.storage_key, '') AS cover
 FROM products p
 JOIN accounts a ON a.id = p.seller_id AND a.status = 'ACTIVE' AND a.approval = 'APPROVED'
 JOIN seller_profiles sp ON sp.account_id = p.seller_id
+JOIN categories c ON c.id = p.category_id
+LEFT JOIN categories pc ON pc.id = c.parent_id
 JOIN LATERAL (SELECT v.price_paise, v.mrp_paise FROM variants v WHERE v.product_id = p.id ORDER BY v.price_paise, v.position LIMIT 1) pv ON TRUE
 JOIN LATERAL (SELECT coalesce(sum(l.quantity - l.reserved - l.sold), 0)::int AS available, coalesce(sum(l.sold), 0)::int AS sold
               FROM inventory_lots l JOIN variants v ON v.id = l.variant_id WHERE v.product_id = p.id AND l.kind = 'SELLER') st ON TRUE
@@ -137,7 +140,8 @@ func (s *Service) Search(ctx context.Context, p Params) (Result, error) {
 	if p.Q != "" {
 		qArg = base.arg(p.Q)
 		like := base.arg("%" + escapeLike(p.Q) + "%")
-		base.where("(l.search @@ websearch_to_tsquery('english', " + qArg + ") OR l.name % " + qArg + " OR l.name ILIKE " + like + " OR l.brand ILIKE " + like + ")")
+		// Category names count too, so "power bank" or "tv" finds those products.
+		base.where("(l.search @@ websearch_to_tsquery('english', " + qArg + ") OR l.cat_search @@ websearch_to_tsquery('english', " + qArg + ") OR l.name % " + qArg + " OR l.name ILIKE " + like + " OR l.brand ILIKE " + like + " OR l.cat_name ILIKE " + like + ")")
 	}
 	if p.PriceMin > 0 {
 		base.where("l.price_paise >= " + base.arg(p.PriceMin))

@@ -158,7 +158,7 @@ func setup(t *testing.T) *env {
 		}}
 	srv := httptest.NewServer(server.New(server.Deps{
 		Log: log, Health: &health.Handler{}, AuthService: authSvc, Auth: auth.NewHandler(authSvc, nil, false),
-		Cart:    &cart.Handler{Svc: &cart.Service{Pool: pool, Q: q}},
+		Cart: &cart.Handler{Svc: &cart.Service{Pool: pool, Q: q}}, Product: &product.Handler{Svc: prods},
 		Payment: &payment.Handler{Svc: pays}, Checkout: &checkout.Handler{Svc: co}, Shipping: &shipping.Handler{Svc: ships}, Orders: &orders.Handler{Svc: ord}, Returns: &returns.Handler{Svc: ret}, Issues: &issues.Handler{Svc: iss}, Notify: &notify.Handler{Svc: note, Redis: rdb, StreamFor: 3 * time.Second},
 		M3: &m3http.Handler{Electrons: led, Membership: mem, Launches: lau, Redis: rdb},
 		M4: &m4http.Handler{Reviews: rev, Programmes: prog, Products: prods},

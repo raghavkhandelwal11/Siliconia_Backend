@@ -211,6 +211,14 @@ func TestSearchFiltersFacetsAndSorting(t *testing.T) {
 		t.Fatalf("spec facets: %+v", r.Facets.Specs)
 	}
 
+	// Category names match too: "laptop" finds Aero 14 though its name lacks the word.
+	if _, r = f.get("q=laptop"); names(r) != "Aero 14" {
+		t.Fatalf("category-name search: %s", names(r))
+	}
+	if _, r = f.get("q=phone&sort=price_asc"); names(r) != "Nova Lite,Nova 5G,Zen Pro" {
+		t.Fatalf("parent-category search: %s", names(r))
+	}
+
 	// Choosing iOS narrows results and brands, but OS still offers Android.
 	_, r = f.get("category=smartphones&spec.os=iOS")
 	if names(r) != "Zen Pro" || len(r.Facets.Brands) != 1 {

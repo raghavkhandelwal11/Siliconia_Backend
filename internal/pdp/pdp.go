@@ -276,8 +276,7 @@ func (s *Service) LiveBlock(ctx context.Context, productID uuid.UUID, viewer *au
 	return out, nil
 }
 
-// actions maps the viewer's role to the action area (UI-PUB-05). Launch deals
-// arrive in M3, creators and promoters in M4.
+// actions maps the viewer's role to the action area (UI-PUB-05).
 func actions(role auth.Role, viewer *auth.Claims, sellerID, productID uuid.UUID, inStock bool) []Action {
 	cart := Action{Key: "add_to_cart", Enabled: inStock}
 	buy := Action{Key: "buy_now", Enabled: inStock}
@@ -300,7 +299,7 @@ func actions(role auth.Role, viewer *auth.Claims, sellerID, productID uuid.UUID,
 	case auth.RoleCreator:
 		return []Action{{Key: "request_demo", Enabled: true, Href: "/creator?demo=" + productID.String()}}
 	case auth.RoleAdmin:
-		return []Action{{Key: "hide", Reason: "COMING_M5"}}
+		return []Action{{Key: "add_to_cart", Reason: "OTHER_ROLE"}}
 	}
 	return []Action{}
 }
